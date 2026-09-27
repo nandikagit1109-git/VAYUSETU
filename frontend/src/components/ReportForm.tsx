@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { submitReport } from '../api'
 import type { CitizenReport } from '../types'
+import PlumeLine from './PlumeLine'
 import { CITY_COORDS, CITY_LABELS, hazeColor } from './MapView'
 
 interface Props {
@@ -11,7 +12,7 @@ interface Props {
 type Visibility = '' | 'clear' | 'hazy' | 'very_hazy'
 
 export default function ReportForm({ onCreated }: Props) {
-  const [city, setCity] = useState('delhi')
+  const [cityInput, setCityInput] = useState('Delhi')
   const [lat, setLat] = useState(String(CITY_COORDS.delhi[0]))
   const [lon, setLon] = useState(String(CITY_COORDS.delhi[1]))
   const [visibility, setVisibility] = useState<Visibility>('')
@@ -21,14 +22,23 @@ export default function ReportForm({ onCreated }: Props) {
   const [result, setResult] = useState<CitizenReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  function handleCityChange(next: string) {
-    setCity(next)
-    const coords = CITY_COORDS[next]
-    if (coords) {
-      setLat(String(coords[0]))
-      setLon(String(coords[1]))
-    }
-  }
+  const matched = useMemo(
+    () =>
+      Object.keys(CITY_COORDS).find(
+        (k) =>
+          k === cityInput.trim().toLowerCase() ||
+          (CITY_LABELS[k] ?? '').toLowerCase() === cityInput.trim().toLowerCase(),
+      ) ?? null,
+    [cityInput],
+  )
+  const city = matched ?? (cityInput.trim().toLowerCase() || 'delhi')
+
+  useEffect(() => {
+    if (!matched) return
+    const coords = CITY_COORDS[matched]
+    setLat(String(coords[0]))
+    setLon(String(coords[1]))
+  }, [matched])
 
   function handlePhoto(file: File | null) {
     setResult(null)
@@ -104,27 +114,30 @@ export default function ReportForm({ onCreated }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="panel p-5">
+    <form onSubmit={handleSubmit} className="panel p-5" data-tour="report-form">
       <h2 className="font-display text-lg font-bold text-soot">Citizen Report</h2>
       <p className="measure mt-1 mb-4 text-xs leading-relaxed text-ash">
         Submit a sky photo or a manual visibility reading. You get an instant haze/AQI-proxy score and a pin on the map.
       </p>
 
+      <PlumeLine value={cityInput} complete={matched !== null} />
       <label className="label" htmlFor="report-city">
         City
       </label>
-      <select
+      <input
         id="report-city"
-        value={city}
-        onChange={(e) => handleCityChange(e.target.value)}
+        list="report-city-options"
+        value={cityInput}
+        onChange={(e) => setCityInput(e.target.value)}
         className="field mb-3"
-      >
+        autoComplete="off"
+        placeholder="Type a city, e.g. Delhi"
+      />
+      <datalist id="report-city-options">
         {Object.keys(CITY_COORDS).map((c) => (
-          <option key={c} value={c}>
-            {CITY_LABELS[c] ?? c}
-          </option>
+          <option key={c} value={CITY_LABELS[c] ?? c} />
         ))}
-      </select>
+      </datalist>
 
       <div className="mb-3 grid grid-cols-2 gap-3">
         <div>

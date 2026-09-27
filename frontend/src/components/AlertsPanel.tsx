@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { acknowledgeAlert, checkAlerts, getAlerts } from '../api'
 import type { Alert } from '../types'
+import InfoAccordion from './InfoAccordion'
 
 const POLL_MS = 30000
 
@@ -68,7 +69,7 @@ export default function AlertsPanel() {
   })
 
   return (
-    <div className="panel p-5">
+    <div className="panel p-5" data-tour="alerts-list">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-display text-lg font-bold text-soot">Alerts and GRAP recommendations</h2>
         <span className="text-xs text-ash">threshold check runs every 30s</span>
@@ -77,6 +78,30 @@ export default function AlertsPanel() {
         When a forecast crosses a GRAP threshold within 24 hours, an alert appears here with the matching graded
         response action.
       </p>
+
+      <div className="measure mb-4">
+        <InfoAccordion title="What does this alert mean?">
+          <p className="mb-2">
+            Alerts are forecast-driven, not reading-driven. Every 30 seconds the checker reads the 72-hour forecast for
+            Delhi, Kanpur and Pune, takes the highest predicted AQI in the next 24 hours, and raises an alert if that
+            value is above 200. The band it falls in sets the GRAP stage, and the action text is the real measure list
+            for that stage, summarised.
+          </p>
+          <dl className="mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt className="tnum text-soot">201 to 300</dt>
+            <dd>Poor, Stage-I: waste-burning enforcement, road sweeping, border checks</dd>
+            <dt className="tnum text-soot">301 to 400</dt>
+            <dd>Very Poor, Stage-II: adds diesel-generator ban, construction halt, work-from-home advisory</dd>
+            <dt className="tnum text-soot">above 400</dt>
+            <dd>Severe, Stage-III/IV: adds truck no-entry, school closure advisory, fossil-fuel industry stoppage</dd>
+          </dl>
+          <p>
+            One alert per city and stage stays open at a time; acknowledging it is what allows a later alert for the
+            same city to be raised. The channel chip shows where the notification was routed: this dashboard, plus
+            simulated SMS and WhatsApp.
+          </p>
+        </InfoAccordion>
+      </div>
 
       {error && <div className="banner-warn mb-3">{error}</div>}
 

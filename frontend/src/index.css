@@ -154,6 +154,23 @@ h3 {
   background: transparent;
   border: none;
 }
+/* The arrowhead appears once its vector has finished drawing in. */
+@keyframes vayu-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.wind-arrow-icon svg {
+  animation: vayu-appear 0.35s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wind-arrow-icon svg {
+    animation: none;
+  }
+}
 
 /* Strip Leaflet's default control chrome so it sits flat in the warm UI. */
 .leaflet-bar {

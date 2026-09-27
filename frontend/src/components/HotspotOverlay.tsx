@@ -1,9 +1,12 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
+import { animate, useReducedMotion } from 'framer-motion'
 import { getHotspots } from '../api'
 import type { Hotspot } from '../types'
 import { CITY_COORDS, CITY_LABELS } from './MapView'
+import { EASE, SmokeRule } from '../motion'
+import TraceWind from './TraceWind'
 
 const ARROW_LENGTH_KM = 90
 const SOOT = '#211e1a'
@@ -54,6 +57,73 @@ const CAUSE_META: Record<string, { color: string; label: string }> = {
   unknown: { color: '#7c7367', label: 'Unknown' },
 }
 
+const VECTOR_DRAW_S = 0.9
+
+// A wind vector that draws itself in (SmokePath behaviour, applied to the Leaflet
+// SVG path). The arrowhead marker only appears once the stroke has landed.
+function WindVector({ from, to, bearing, delay }: { from: [number, number]; to: [number, number]; bearing: number; delay: number }) {
+  const reduced = useReducedMotion()
+  const lineRef = useRef<L.Polyline | null>(null)
+  const [drawn, setDrawn] = useState(Boolean(reduced))
+  const geometryKey = `${from[0]},${from[1]}-${to[0]},${to[1]}`
+
+  useEffect(() => {
+    if (reduced) {
+      setDrawn(true)
+      return
+    }
+    setDrawn(false)
+    let frame = 0
+    let ctrl: { stop: () => void } | null = null
+    const finish = () => {
+      const el = lineRef.current?.getElement() as SVGPathElement | null | undefined
+      if (el) {
+        el.style.strokeDasharray = ''
+        el.style.strokeDashoffset = ''
+      }
+      setDrawn(true)
+    }
+    const start = () => {
+      const el = lineRef.current?.getElement() as SVGPathElement | null | undefined
+      const len = el?.getTotalLength?.() ?? 0
+      if (!el || !len) {
+        // The renderer has not attached the path yet; try once more next frame.
+        frame = requestAnimationFrame(start)
+        return
+      }
+      el.style.strokeDasharray = String(len)
+      el.style.strokeDashoffset = String(len)
+      ctrl = animate(len, 0, {
+        duration: VECTOR_DRAW_S,
+        ease: EASE,
+        delay,
+        onUpdate: (v) => {
+          el.style.strokeDashoffset = String(v)
+        },
+        onComplete: finish,
+      })
+    }
+    frame = requestAnimationFrame(start)
+    // Backstop: a throttled frame loop must not leave the vector hidden mid-draw.
+    const backstop = window.setTimeout(() => {
+      ctrl?.stop()
+      finish()
+    }, (delay + VECTOR_DRAW_S) * 1000 + 250)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(backstop)
+      ctrl?.stop()
+    }
+  }, [reduced, delay, geometryKey])
+
+  return (
+    <>
+      <Polyline ref={lineRef} positions={[from, to]} pathOptions={{ color: WIND_INK, weight: 2, opacity: 0.85 }} />
+      {drawn && <Marker position={to} icon={windArrowIcon(bearing)} />}
+    </>
+  )
+}
+
 export default function HotspotOverlay() {
   const [hotspots, setHotspots] = useState<Hotspot[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -99,7 +169,7 @@ export default function HotspotOverlay() {
               </Tooltip>
             </CircleMarker>
           ))}
-          {hotspots.map((h) => {
+          {hotspots.map((h, i) => {
             const meta = CAUSE_META[h.cause] ?? CAUSE_META.unknown
             const arrowEnd = destPoint(h.latitude, h.longitude, h.wind_direction_deg, ARROW_LENGTH_KM)
             const downwindPos = h.downwind_city ? CITY_COORDS[h.downwind_city] : null
@@ -129,8 +199,12 @@ export default function HotspotOverlay() {
                     )}
                   </Tooltip>
                 </CircleMarker>
-                <Polyline positions={[[h.latitude, h.longitude], arrowEnd]} pathOptions={{ color: WIND_INK, weight: 2, opacity: 0.85 }} />
-                <Marker position={arrowEnd} icon={windArrowIcon(h.wind_direction_deg)} />
+                <WindVector
+                  from={[h.latitude, h.longitude]}
+                  to={arrowEnd}
+                  bearing={h.wind_direction_deg}
+                  delay={0.2 + i * 0.25}
+                />
                 {downwindPos && (
                   <Polyline
                     positions={[[h.latitude, h.longitude], downwindPos]}
@@ -164,6 +238,10 @@ export default function HotspotOverlay() {
           plume path to downwind city
         </span>
       </div>
+
+      <SmokeRule className="my-5" />
+
+      <TraceWind hotspots={hotspots} />
     </div>
   )
 }

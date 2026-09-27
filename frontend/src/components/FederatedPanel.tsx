@@ -1,29 +1,57 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { getFederatedStatus, runFederated } from '../api'
 import type { FederatedStatus } from '../types'
+import { RevealWords, SmokeRule } from '../motion'
+import InfoAccordion from './InfoAccordion'
 
 const POLL_MS = 2000
 const TOTAL_ROUNDS = 8
+const LINE_DRAW_MS = 900
+// Convergence Pulse: local lines stagger 0.25s apart, then the shared global line
+// waits 1.4s after the last local line before drawing in on top.
+const STAGGER_MS = 250
+const GLOBAL_WAIT_MS = 1400
 
 // Series colours stay inside the warm family and are separated by lightness plus
-// dash pattern, so the four lines stay distinct without a rainbow. The aggregated
-// global line is the ember accent: it is the thing this panel is really about.
+// dash pattern. The three local lines render faint; the aggregated global line is
+// the ember accent at full opacity and heavier stroke.
 const SERIES = {
-  Delhi: { stroke: '#b0763a', dash: undefined, width: 2 }, // ochre
-  Kanpur: { stroke: '#6e5a46', dash: '6 3', width: 2 }, // dark warm brown
-  Pune: { stroke: '#a89880', dash: '2 3', width: 2 }, // pale dust-brown
-  Global: { stroke: '#9e3b18', dash: undefined, width: 3 }, // ember accent
+  Delhi: { stroke: '#b0763a', dash: undefined, width: 2, opacity: 0.45 },
+  Kanpur: { stroke: '#6e5a46', dash: '6 3', width: 2, opacity: 0.45 },
+  Pune: { stroke: '#a89880', dash: '2 3', width: 2, opacity: 0.45 },
+  Global: { stroke: '#9e3b18', dash: undefined, width: 3.5, opacity: 1 },
 } as const
 
 const AXIS = { stroke: '#7c7367', tickFill: '#7c7367' }
 const GRID = 'rgba(33, 30, 26, 0.10)'
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 
+// "Actively monitoring" breath: inhale 4s, hold 4s, exhale 4s. Only while running.
+function BreathingDot() {
+  const reduced = useReducedMotion()
+  return (
+    <motion.span
+      aria-hidden="true"
+      className="inline-block h-2.5 w-2.5 rounded-full bg-ember"
+      animate={reduced ? { scale: 1 } : { scale: [1, 1.4, 1.4, 1] }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : { duration: 12, times: [0, 4 / 12, 8 / 12, 1], repeat: Infinity, ease: 'easeInOut' }
+      }
+    />
+  )
+}
+
 export default function FederatedPanel() {
+  const reduced = useReducedMotion()
   const [status, setStatus] = useState<FederatedStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [seq, setSeq] = useState({ Delhi: false, Kanpur: false, Pune: false, Global: false })
+  const seqStarted = useRef(false)
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -54,6 +82,36 @@ export default function FederatedPanel() {
     return () => window.clearInterval(t)
   }, [status?.status, refresh])
 
+  const rounds = status?.rounds ?? []
+  const done = rounds.length
+  const running = status?.status === 'running'
+
+  // Kick the Convergence Pulse sequence once the first round of a run lands.
+  useEffect(() => {
+    if (done === 0) {
+      seqStarted.current = false
+      setSeq({ Delhi: false, Kanpur: false, Pune: false, Global: false })
+      return
+    }
+    if (seqStarted.current) return
+    seqStarted.current = true
+    // Reduced motion: no stagger, every series is on screen from the first round.
+    if (reduced) {
+      setSeq({ Delhi: true, Kanpur: true, Pune: true, Global: true })
+      return
+    }
+    const timers = [
+      window.setTimeout(() => setSeq((s) => ({ ...s, Delhi: true })), 0),
+      window.setTimeout(() => setSeq((s) => ({ ...s, Kanpur: true })), STAGGER_MS),
+      window.setTimeout(() => setSeq((s) => ({ ...s, Pune: true })), STAGGER_MS * 2),
+      window.setTimeout(
+        () => setSeq((s) => ({ ...s, Global: true })),
+        STAGGER_MS * 2 + LINE_DRAW_MS + GLOBAL_WAIT_MS,
+      ),
+    ]
+    return () => timers.forEach((t) => window.clearTimeout(t))
+  }, [done, reduced])
+
   async function handleStart() {
     setError(null)
     setStarting(true)
@@ -67,9 +125,6 @@ export default function FederatedPanel() {
     }
   }
 
-  const rounds = status?.rounds ?? []
-  const done = rounds.length
-  const running = status?.status === 'running'
   const chartData = rounds.map((r) => ({
     round: r.round,
     Delhi: r.client_losses.delhi,
@@ -78,9 +133,9 @@ export default function FederatedPanel() {
     Global: r.global_loss,
   }))
 
-  // The status dot is a plain, static indicator; the live round counter and the
-  // chart filling in are the real "loading" signal (no shimmering placeholder).
-  const dotColor = running ? 'bg-ember' : status?.status === 'completed' ? 'bg-ochre' : 'bg-ash'
+  const dot = running ? <BreathingDot /> : (
+    <span className={`inline-block h-2.5 w-2.5 rounded-full ${status?.status === 'completed' ? 'bg-ochre' : 'bg-ash'}`} aria-hidden="true" />
+  )
   const statusLabel = running
     ? `Training, round ${done} of ${TOTAL_ROUNDS}`
     : status?.status === 'completed'
@@ -100,7 +155,7 @@ export default function FederatedPanel() {
         </button>
 
         <div className="mt-4 flex items-center gap-2 text-sm">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${dotColor}`} aria-hidden="true" />
+          {dot}
           <span className="text-soot">{statusLabel}</span>
         </div>
         {status?.started_at && (
@@ -110,12 +165,19 @@ export default function FederatedPanel() {
           <p className="tnum text-xs text-ash">Completed {new Date(status.completed_at).toLocaleTimeString()}</p>
         )}
         {error && <div className="banner-warn mt-3">{error}</div>}
+
+        <div className="mt-4">
+          <InfoAccordion title="What is federated learning?">
+            <RevealWords text="Federated learning trains one shared model across the three city nodes without pooling their raw data. Each city fits the model on its own hourly AQI history and sends only weight updates to a central aggregator, which averages them with FedAvg and returns the improved shared weights. Raw observations never leave the city that collected them." />
+          </InfoAccordion>
+        </div>
       </div>
 
-      <div className="panel p-5">
-        <h3 className="mb-3 font-display text-sm font-bold text-soot">
+      <div className="panel p-5" data-tour="fed-chart">
+        <h3 className="mb-2 font-display text-sm font-bold text-soot">
           Loss convergence · local per-city and aggregated global
         </h3>
+        <SmokeRule className="mb-3" />
         <div className="h-[460px]">
           {done === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
@@ -157,10 +219,18 @@ export default function FederatedPanel() {
                   labelFormatter={(v) => `Round ${v}`}
                 />
                 <Legend wrapperStyle={{ fontSize: 12, color: '#211e1a' }} />
-                <Line type="monotone" dataKey="Delhi" stroke={SERIES.Delhi.stroke} strokeWidth={SERIES.Delhi.width} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={300} />
-                <Line type="monotone" dataKey="Kanpur" stroke={SERIES.Kanpur.stroke} strokeWidth={SERIES.Kanpur.width} strokeDasharray={SERIES.Kanpur.dash} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={300} />
-                <Line type="monotone" dataKey="Pune" stroke={SERIES.Pune.stroke} strokeWidth={SERIES.Pune.width} strokeDasharray={SERIES.Pune.dash} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={300} />
-                <Line type="monotone" dataKey="Global" stroke={SERIES.Global.stroke} strokeWidth={SERIES.Global.width} dot={false} animationDuration={300} />
+                {seq.Delhi && (
+                  <Line type="monotone" dataKey="Delhi" stroke={SERIES.Delhi.stroke} strokeOpacity={SERIES.Delhi.opacity} strokeWidth={SERIES.Delhi.width} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={LINE_DRAW_MS} isAnimationActive={!reduced} />
+                )}
+                {seq.Kanpur && (
+                  <Line type="monotone" dataKey="Kanpur" stroke={SERIES.Kanpur.stroke} strokeOpacity={SERIES.Kanpur.opacity} strokeWidth={SERIES.Kanpur.width} strokeDasharray={SERIES.Kanpur.dash} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={LINE_DRAW_MS} isAnimationActive={!reduced} />
+                )}
+                {seq.Pune && (
+                  <Line type="monotone" dataKey="Pune" stroke={SERIES.Pune.stroke} strokeOpacity={SERIES.Pune.opacity} strokeWidth={SERIES.Pune.width} strokeDasharray={SERIES.Pune.dash} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={LINE_DRAW_MS} isAnimationActive={!reduced} />
+                )}
+                {seq.Global && (
+                  <Line type="monotone" dataKey="Global" stroke={SERIES.Global.stroke} strokeOpacity={SERIES.Global.opacity} strokeWidth={SERIES.Global.width} dot={false} animationDuration={LINE_DRAW_MS} isAnimationActive={!reduced} />
+                )}
               </LineChart>
             </ResponsiveContainer>
           )}
