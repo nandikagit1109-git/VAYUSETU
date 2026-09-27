@@ -4,12 +4,7 @@ import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip,
 import { getForecast } from '../api'
 import type { ForecastPointOut } from '../types'
 import { FadeUp, SmokeRule } from '../motion'
-
-const CITIES = [
-  { value: 'delhi', label: 'Delhi' },
-  { value: 'kanpur', label: 'Kanpur' },
-  { value: 'pune', label: 'Pune' },
-]
+import { CITIES, cityLabel } from '../cities'
 
 const AXIS = '#7c7367'
 const GRID = 'rgba(33, 30, 26, 0.10)'
@@ -34,7 +29,7 @@ export default function ForecastChart() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const cityLabel = CITIES.find((c) => c.value === city)?.label ?? city
+  const label = cityLabel(city)
 
   useEffect(() => {
     let active = true
@@ -80,9 +75,9 @@ export default function ForecastChart() {
           <label className="label" htmlFor="forecast-city">
             City
           </label>
-          <select id="forecast-city" value={city} onChange={(e) => setCity(e.target.value)} className="field w-40">
+          <select id="forecast-city" value={city} onChange={(e) => setCity(e.target.value)} className="field w-52">
             {CITIES.map((c) => (
-              <option key={c.value} value={c.value}>
+              <option key={c.key} value={c.key}>
                 {c.label}
               </option>
             ))}
@@ -95,13 +90,13 @@ export default function ForecastChart() {
       <div className="h-[340px]">
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-ash">
-            Fitting the {cityLabel} series and projecting 72 hours…
+            Fitting the {label} series and projecting 72 hours…
           </div>
         ) : error ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-ember">{error}</div>
         ) : pending ? (
           <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
-            <span className="text-sm text-soot">Forecast pending for {cityLabel}.</span>
+            <span className="text-sm text-soot">Forecast pending for {label}.</span>
             <span className="measure text-xs text-ash">
               The time-series model for this city has not finished training yet.
             </span>

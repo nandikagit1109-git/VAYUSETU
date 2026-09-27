@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { checkAlerts, getAlerts } from '../api'
 import type { Alert } from '../types'
 import { EASE } from '../motion'
-import { CITY_LABELS } from './MapView'
+import { cityLabel } from '../cities'
 
 const POLL_MS = 30000
 
@@ -85,7 +85,7 @@ export default function SevereBanner({ suppressed, onView }: SevereBannerProps) 
           />
           <p className="min-w-0 flex-1 text-xs leading-relaxed text-soot">
             <span className="font-semibold">
-              {worst.severity} alert for {CITY_LABELS[worst.city] ?? worst.city}
+              {worst.severity} alert for {cityLabel(worst.city)}
             </span>
             <span className="text-ash">
               {' '}

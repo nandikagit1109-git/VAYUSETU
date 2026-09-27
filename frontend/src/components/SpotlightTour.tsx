@@ -19,7 +19,7 @@ export interface TourStep {
 export const TOUR_STEPS: TourStep[] = [
   {
     target: 'tabs',
-    title: 'Four sections, one corridor',
+    title: 'Four sections, one network',
     body: 'Map and report, federated training, hotspots with forecast, and alerts. Everything runs against local mock data by default, so it works offline.',
   },
   {
@@ -32,7 +32,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'map',
     tab: 'map',
     title: 'Pins land on the map',
-    body: 'Each report is plotted where it was filed and coloured by severity. City nodes stay neutral so citizen readings are the only loud marks.',
+    body: 'Each report is plotted where it was filed and coloured by severity. The three federated cohort nodes are marked in ochre; every other city stays a quiet outline so citizen readings are the loud marks.',
   },
   {
     target: 'fed-chart',

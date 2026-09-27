@@ -3,7 +3,8 @@ import type { FormEvent } from 'react'
 import { submitReport } from '../api'
 import type { CitizenReport } from '../types'
 import PlumeLine from './PlumeLine'
-import { CITY_COORDS, CITY_LABELS, hazeColor } from './MapView'
+import { hazeColor } from './MapView'
+import { CITIES, CITY_COORDS } from '../cities'
 
 interface Props {
   onCreated: (report: CitizenReport) => void
@@ -22,15 +23,18 @@ export default function ReportForm({ onCreated }: Props) {
   const [result, setResult] = useState<CitizenReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const matched = useMemo(
-    () =>
-      Object.keys(CITY_COORDS).find(
-        (k) =>
-          k === cityInput.trim().toLowerCase() ||
-          (CITY_LABELS[k] ?? '').toLowerCase() === cityInput.trim().toLowerCase(),
-      ) ?? null,
-    [cityInput],
-  )
+  // An exact key or label match wins; otherwise a prefix that identifies exactly
+  // one city still settles the plume line. Worth having now that the network runs
+  // to forty-odd names and nobody wants to type Thiruvananthapuram in full.
+  const matched = useMemo(() => {
+    const q = cityInput.trim().toLowerCase()
+    if (!q) return null
+    const exact = CITIES.find((c) => c.key === q || c.label.toLowerCase() === q)
+    if (exact) return exact.key
+    if (q.length < 2) return null
+    const hits = CITIES.filter((c) => c.key.startsWith(q) || c.label.toLowerCase().startsWith(q))
+    return hits.length === 1 ? hits[0].key : null
+  }, [cityInput])
   const city = matched ?? (cityInput.trim().toLowerCase() || 'delhi')
 
   useEffect(() => {
@@ -134,8 +138,8 @@ export default function ReportForm({ onCreated }: Props) {
         placeholder="Type a city, e.g. Delhi"
       />
       <datalist id="report-city-options">
-        {Object.keys(CITY_COORDS).map((c) => (
-          <option key={c} value={CITY_LABELS[c] ?? c} />
+        {CITIES.map((c) => (
+          <option key={c.key} value={c.label} />
         ))}
       </datalist>
 

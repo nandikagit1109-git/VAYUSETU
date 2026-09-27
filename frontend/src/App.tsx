@@ -23,7 +23,7 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 const TAB_BLURB: Record<Tab, string> = {
-  map: 'Citizen observations across the corridor',
+  map: 'Citizen observations across the network',
   federated: 'Local training, aggregated weights',
   hotspots: 'Sources and downwind transport',
   alerts: 'Threshold crossings and GRAP actions',

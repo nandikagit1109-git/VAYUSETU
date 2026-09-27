@@ -7,6 +7,8 @@ crash the app.
 import os
 from pathlib import Path
 
+from .cities import CITY_TABLE, FEDERATED_CITIES
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BACKEND_DIR / "data"
 UPLOAD_DIR = BACKEND_DIR / "uploads"
@@ -21,9 +23,6 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")
 ENABLE_LIVE_SATELLITE = os.getenv("ENABLE_LIVE_SATELLITE", "false").lower() == "true"
 
-# Demo cities (lowercase names are used as keys across the whole stack).
-CITIES: dict[str, tuple[float, float]] = {
-    "delhi": (28.6139, 77.2090),
-    "kanpur": (26.4499, 80.3319),
-    "pune": (18.5204, 73.8567),
-}
+# Cities are defined once in app.cities; these are the derived lookups the rest
+# of the backend uses (lowercase keys throughout).
+CITIES: dict[str, tuple[float, float]] = {c["key"]: (c["lat"], c["lon"]) for c in CITY_TABLE}

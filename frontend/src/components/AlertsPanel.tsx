@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { acknowledgeAlert, checkAlerts, getAlerts } from '../api'
 import type { Alert } from '../types'
+import { CITIES, cityLabel } from '../cities'
 import InfoAccordion from './InfoAccordion'
 
 const POLL_MS = 30000
@@ -83,9 +84,9 @@ export default function AlertsPanel() {
         <InfoAccordion title="What does this alert mean?">
           <p className="mb-2">
             Alerts are forecast-driven, not reading-driven. Every 30 seconds the checker reads the 72-hour forecast for
-            Delhi, Kanpur and Pune, takes the highest predicted AQI in the next 24 hours, and raises an alert if that
-            value is above 200. The band it falls in sets the GRAP stage, and the action text is the real measure list
-            for that stage, summarised.
+            all {CITIES.length} cities in the network, takes each city&apos;s highest predicted AQI in the next 24 hours,
+            and raises an alert if that value is above 200. The band it falls in sets the GRAP stage, and the action text
+            is the real measure list for that stage, summarised.
           </p>
           <dl className="mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             <dt className="tnum text-soot">201 to 300</dt>
@@ -97,8 +98,9 @@ export default function AlertsPanel() {
           </dl>
           <p>
             One alert per city and stage stays open at a time; acknowledging it is what allows a later alert for the
-            same city to be raised. The channel chip shows where the notification was routed: this dashboard, plus
-            simulated SMS and WhatsApp.
+            same city to be raised. GRAP itself is Delhi-NCR&apos;s protocol, so for the other cities the same AQI bands
+            are applied to keep the stages comparable. The channel chip shows where the notification was routed: this
+            dashboard, plus simulated SMS and WhatsApp.
           </p>
         </InfoAccordion>
       </div>
@@ -126,7 +128,7 @@ export default function AlertsPanel() {
                   >
                     {a.severity}
                   </span>
-                  <span className="font-display text-sm font-bold capitalize text-soot">{a.city}</span>
+                  <span className="font-display text-sm font-bold text-soot">{cityLabel(a.city)}</span>
                   <span className="text-xs text-ash">
                     predicted AQI <span className="tnum font-medium text-soot">{a.predicted_aqi.toFixed(0)}</span>
                   </span>

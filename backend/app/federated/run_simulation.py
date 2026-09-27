@@ -1,6 +1,10 @@
-"""Runs the federated simulation: 3 city clients + FedAvg server in ONE
-process using Flower's simulation API (no sockets/ports — avoids
-"client can't connect to server" bugs entirely).
+"""Runs the federated simulation: the fixed city cohort (see app.cities) +
+FedAvg server in ONE process using Flower's simulation API (no sockets/ports —
+avoids "client can't connect to server" bugs entirely).
+
+The cohort is deliberately smaller than the full city network: a simulation
+scales linearly in clients, and the convergence chart can only carry a handful
+of local loss lines.
 
 Hardcoded 8 rounds for a predictable, short demo runtime. Writes round-by-round
 progress to status.json via atomic writes so GET /api/federated/status can
@@ -17,14 +21,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vayusetu.fl.simulation")
 
 NUM_ROUNDS = 8  # hardcoded on purpose — not configurable for the hackathon demo
-CITY_ORDER = ["delhi", "kanpur", "pune"]
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.config import FEDERATED_CITIES  # noqa: E402
 from app.federated.client import CityAQIClient  # noqa: E402
 from app.federated.server import STATUS_PATH, RecordingFedAvg, StatusRecorder, atomic_write_json  # noqa: E402
+
+NUM_CLIENTS = len(FEDERATED_CITIES)
 
 
 def _now() -> str:
@@ -45,7 +51,7 @@ def client_fn(context):
     except (TypeError, ValueError):
         idx = 0
     # flwr 1.11 simulation requires a Client (not NumPyClient) — convert.
-    return CityAQIClient(CITY_ORDER[idx % len(CITY_ORDER)]).to_client()
+    return CityAQIClient(FEDERATED_CITIES[idx % NUM_CLIENTS]).to_client()
 
 
 def main() -> None:
@@ -69,16 +75,16 @@ def main() -> None:
             recorder=recorder,
             fraction_fit=1.0,
             fraction_evaluate=0.0,  # server-side global eval is done in the recorder
-            min_fit_clients=3,
-            min_available_clients=3,
+            min_fit_clients=NUM_CLIENTS,
+            min_available_clients=NUM_CLIENTS,
         )
         start_simulation(
             client_fn=client_fn,
-            num_clients=3,
+            num_clients=NUM_CLIENTS,
             config=ServerConfig(num_rounds=NUM_ROUNDS),
             strategy=strategy,
             client_resources={"num_cpus": 1, "num_gpus": 0.0},
-            ray_init_args={"include_dashboard": False, "ignore_reinit_error": True, "num_cpus": 3},
+            ray_init_args={"include_dashboard": False, "ignore_reinit_error": True, "num_cpus": NUM_CLIENTS},
         )
         st = recorder.read()
         st["status"] = "completed"

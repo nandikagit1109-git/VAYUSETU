@@ -126,13 +126,13 @@ const BEATS: Beat[] = [
   {
     eyebrow: 'Step 1 of 3',
     title: 'Report what the sky looks like',
-    body: 'A photo or a visibility guess from your street turns into a haze score with a confidence value, pinned to the corridor map.',
+    body: 'A photo or a visibility guess from your street turns into a haze score with a confidence value, pinned to the all-India network map.',
     art: (reduced) => <PinArt reduced={reduced} />,
   },
   {
     eyebrow: 'Step 2 of 3',
-    title: 'Three cities train together, data stays put',
-    body: 'Delhi, Kanpur and Pune each train on their own observations. Only model weights travel; the raw reports never leave their city.',
+    title: 'Cities train together, data stays put',
+    body: 'Delhi, Kanpur and Pune are the training cohort: each node fits its own observations and only model weights travel. The raw reports never leave their city.',
     art: (reduced) => <NodesArt reduced={reduced} />,
   },
   {

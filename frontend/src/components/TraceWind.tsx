@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { animate, motion, useReducedMotion } from 'framer-motion'
 import type { Hotspot } from '../types'
-import { CITY_LABELS } from './MapView'
+import { cityLabel } from '../cities'
 import { EASE, FadeUp } from '../motion'
 
 const SOOT = '#211e1a'
@@ -125,7 +125,7 @@ export default function TraceWind({ hotspots }: TraceWindProps) {
     )
   }
 
-  const city = CITY_LABELS[h.downwind_city!] ?? h.downwind_city!
+  const city = cityLabel(h.downwind_city!)
   const eta = h.eta_hours ?? 0
   const elapsed = eta * t
   const remaining = eta * (1 - t)
@@ -154,7 +154,7 @@ export default function TraceWind({ hotspots }: TraceWindProps) {
           >
             {candidates.map((c, i) => (
               <option key={c.id} value={i}>
-                #{c.id} · {c.cause.replace('_', ' ')} · {CITY_LABELS[c.downwind_city!] ?? c.downwind_city}
+                #{c.id} · {c.cause.replace('_', ' ')} · {cityLabel(c.downwind_city!)}
               </option>
             ))}
           </select>

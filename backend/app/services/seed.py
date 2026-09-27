@@ -20,23 +20,36 @@ def _parse_dt(value, fallback):
 
 
 def seed_all(session) -> None:
-    """Idempotent: only seeds tables that are empty."""
-    existing_hotspots = session.exec(select(Hotspot)).first()
-    if existing_hotspots is None:
-        now = datetime.now(timezone.utc)
-        for h in mock_data.get_fire_hotspots():
-            try:
-                session.add(Hotspot(
-                    latitude=float(h["latitude"]),
-                    longitude=float(h["longitude"]),
-                    cause=str(h.get("cause", "unknown")),
-                    confidence=float(h.get("confidence", 0.5)),
-                    detected_at=_parse_dt(h.get("detected_at"), now),
-                ))
-            except Exception as exc:
-                logger.warning("skipping malformed hotspot entry %r: %s", h, exc)
+    """Idempotent: alerts seed only into an empty table, hotspots are matched by
+    position so widening the mock dataset adds the new sources without touching
+    the rows (or the citizen reports pinned near them) that already exist."""
+    existing = session.exec(select(Hotspot)).all()
+    seen = {(round(h.latitude, 4), round(h.longitude, 4)) for h in existing}
+    added = 0
+    now = datetime.now(timezone.utc)
+    for h in mock_data.get_fire_hotspots():
+        try:
+            lat = float(h["latitude"])
+            lon = float(h["longitude"])
+        except Exception as exc:
+            logger.warning("skipping malformed hotspot entry %r: %s", h, exc)
+            continue
+        if (round(lat, 4), round(lon, 4)) in seen:
+            continue
+        try:
+            session.add(Hotspot(
+                latitude=lat,
+                longitude=lon,
+                cause=str(h.get("cause", "unknown")),
+                confidence=float(h.get("confidence", 0.5)),
+                detected_at=_parse_dt(h.get("detected_at"), now),
+            ))
+            added += 1
+        except Exception as exc:
+            logger.warning("skipping malformed hotspot entry %r: %s", h, exc)
+    if added:
         session.commit()
-        logger.info("seeded hotspots from mock satellite data")
+        logger.info("seeded %d hotspots from mock satellite data", added)
 
     existing_alerts = session.exec(select(Alert)).first()
     if existing_alerts is None:

@@ -4,7 +4,7 @@ import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip } from
 import { animate, useReducedMotion } from 'framer-motion'
 import { getHotspots } from '../api'
 import type { Hotspot } from '../types'
-import { CITY_COORDS, CITY_LABELS } from './MapView'
+import { CITIES, CITY_COORDS, cityLabel, INDIA_BOUNDS, isCohort } from '../cities'
 import { EASE, SmokeRule } from '../motion'
 import TraceWind from './TraceWind'
 
@@ -12,7 +12,8 @@ const ARROW_LENGTH_KM = 90
 const SOOT = '#211e1a'
 const PANEL = '#f2eee6'
 const WIND_INK = '#3b342c' // warm dark ink for the wind vector, so it reads over light tiles
-const PLUME = '#b0763a' // ochre dashed plume path
+const OCHRE = '#b0763a' // federation ochre: cohort city nodes and plume paths
+const PLUME = OCHRE
 
 function destPoint(lat: number, lon: number, bearingDeg: number, distKm: number): [number, number] {
   const rad = (d: number) => (d * Math.PI) / 180
@@ -152,23 +153,32 @@ export default function HotspotOverlay() {
       {error && <div className="banner-warn mb-3">{error}</div>}
 
       <div className="h-[520px] overflow-hidden rounded-sm border border-hairline">
-        <MapContainer center={[28.6, 77.6]} zoom={6} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
+        <MapContainer bounds={INDIA_BOUNDS} boundsOptions={{ padding: [24, 24] }} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          {Object.entries(CITY_COORDS).map(([city, pos]) => (
-            <CircleMarker
-              key={city}
-              center={pos}
-              radius={8}
-              pathOptions={{ color: SOOT, weight: 2, fillColor: PANEL, fillOpacity: 1 }}
-            >
-              <Tooltip className="vayu-tooltip" direction="top">
-                <span className="font-semibold">{CITY_LABELS[city] ?? city}</span> · city node
-              </Tooltip>
-            </CircleMarker>
-          ))}
+          {CITIES.map((c) => {
+            const cohort = isCohort(c.key)
+            return (
+              <CircleMarker
+                key={c.key}
+                center={[c.lat, c.lon]}
+                radius={cohort ? 8 : 5}
+                pathOptions={{
+                  color: SOOT,
+                  weight: cohort ? 2 : 1.4,
+                  fillColor: cohort ? OCHRE : PANEL,
+                  fillOpacity: 1,
+                }}
+              >
+                <Tooltip className="vayu-tooltip" direction="top">
+                  <span className="font-semibold">{c.label}</span> ·{' '}
+                  {cohort ? 'federated cohort node' : 'city node'}
+                </Tooltip>
+              </CircleMarker>
+            )
+          })}
           {hotspots.map((h, i) => {
             const meta = CAUSE_META[h.cause] ?? CAUSE_META.unknown
             const arrowEnd = destPoint(h.latitude, h.longitude, h.wind_direction_deg, ARROW_LENGTH_KM)
@@ -193,7 +203,7 @@ export default function HotspotOverlay() {
                     </div>
                     {h.downwind_city && (
                       <div>
-                        Downwind {CITY_LABELS[h.downwind_city] ?? h.downwind_city} · ETA{' '}
+                        Downwind {cityLabel(h.downwind_city)} · ETA{' '}
                         <span className="tnum">{h.eta_hours ?? 'n/a'}</span> h
                       </div>
                     )}
@@ -203,7 +213,9 @@ export default function HotspotOverlay() {
                   from={[h.latitude, h.longitude]}
                   to={arrowEnd}
                   bearing={h.wind_direction_deg}
-                  delay={0.2 + i * 0.25}
+                  // Stagger caps out: an all-India hotspot list would otherwise
+                  // leave the last vectors waiting several seconds to draw.
+                  delay={0.2 + Math.min(i, 7) * 0.25}
                 />
                 {downwindPos && (
                   <Polyline
@@ -211,7 +223,7 @@ export default function HotspotOverlay() {
                     pathOptions={{ color: PLUME, weight: 2, dashArray: '6 6', opacity: 0.9 }}
                   >
                     <Tooltip className="vayu-tooltip" sticky>
-                      Plume path to {CITY_LABELS[h.downwind_city!] ?? h.downwind_city} · ETA{' '}
+                      Plume path to {cityLabel(h.downwind_city!)} · ETA{' '}
                       <span className="tnum">{h.eta_hours ?? 'n/a'}</span> h
                     </Tooltip>
                   </Polyline>

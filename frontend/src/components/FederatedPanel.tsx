@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { getFederatedStatus, runFederated } from '../api'
 import type { FederatedStatus } from '../types'
+import { CITIES } from '../cities'
 import { RevealWords, SmokeRule } from '../motion'
 import InfoAccordion from './InfoAccordion'
 
@@ -147,8 +148,9 @@ export default function FederatedPanel() {
       <div className="panel flex flex-col p-5">
         <h2 className="font-display text-lg font-bold text-soot">Federated Learning</h2>
         <p className="measure mt-1 mb-4 text-xs leading-relaxed text-ash">
-          Three city nodes (Delhi, Kanpur, Pune) train a shared next-hour AQI model with Flower FedAvg. Raw data never
-          leaves a city; only model weight updates are aggregated. Runs {TOTAL_ROUNDS} rounds.
+          A cohort of three city nodes — Delhi, Kanpur and Pune out of the {CITIES.length}-city network — trains a shared
+          next-hour AQI model with Flower FedAvg. Raw data never leaves a city; only model weight updates are aggregated.
+          Runs {TOTAL_ROUNDS} rounds.
         </p>
         <button onClick={handleStart} disabled={starting || running} className="btn-primary w-full">
           {running ? 'Training in progress' : starting ? 'Starting…' : 'Start Federated Training'}
@@ -168,7 +170,7 @@ export default function FederatedPanel() {
 
         <div className="mt-4">
           <InfoAccordion title="What is federated learning?">
-            <RevealWords text="Federated learning trains one shared model across the three city nodes without pooling their raw data. Each city fits the model on its own hourly AQI history and sends only weight updates to a central aggregator, which averages them with FedAvg and returns the improved shared weights. Raw observations never leave the city that collected them." />
+            <RevealWords text="Federated learning trains one shared model across the cohort's city nodes without pooling their raw data. Each node fits the model on its own hourly AQI history and sends only weight updates to a central aggregator, which averages them with FedAvg and returns the improved shared weights. Raw observations never leave the city that collected them. Delhi, Kanpur and Pune are the cohort here; the rest of the network is monitored and forecast, but does not join the training round." />
           </InfoAccordion>
         </div>
       </div>

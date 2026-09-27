@@ -1,17 +1,11 @@
 import { CircleMarker, MapContainer, TileLayer, Tooltip } from 'react-leaflet'
 import type { CitizenReport } from '../types'
+import { CITIES, cityLabel, INDIA_BOUNDS, isCohort } from '../cities'
 
-export const CITY_COORDS: Record<string, [number, number]> = {
-  delhi: [28.6139, 77.209],
-  kanpur: [26.4499, 80.3319],
-  pune: [18.5204, 73.8567],
-}
-
-export const CITY_LABELS: Record<string, string> = {
-  delhi: 'Delhi',
-  kanpur: 'Kanpur',
-  pune: 'Pune',
-}
+// Structural ink for vector edges so markers stay legible on light OSM tiles.
+const SOOT = '#211e1a'
+const PANEL = '#f2eee6'
+const OCHRE = '#b0763a'
 
 // AQI-proxy severity ramp. Concrete hexes (Leaflet pathOptions cannot read CSS
 // vars) that mirror the --sev-* tokens in index.css: heat rises with severity,
@@ -31,34 +25,41 @@ export function severityLabel(score: number): string {
   return 'Severe'
 }
 
-// Structural ink for vector edges so markers stay legible on light OSM tiles.
-const SOOT = '#211e1a'
-const PANEL = '#f2eee6'
-
 interface Props {
   reports: CitizenReport[]
 }
 
 export default function MapView({ reports }: Props) {
   return (
-    <MapContainer center={[23.5, 78.5]} zoom={5} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
+    <MapContainer bounds={INDIA_BOUNDS} boundsOptions={{ padding: [24, 24] }} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {/* City nodes are neutral infrastructure; only real citizen data carries AQI colour. */}
-      {Object.entries(CITY_COORDS).map(([city, pos]) => (
-        <CircleMarker
-          key={city}
-          center={pos}
-          radius={8}
-          pathOptions={{ color: SOOT, weight: 2, fillColor: PANEL, fillOpacity: 1 }}
-        >
-          <Tooltip className="vayu-tooltip" direction="top">
-            <span className="font-semibold">{CITY_LABELS[city] ?? city}</span> · city node
-          </Tooltip>
-        </CircleMarker>
-      ))}
+      {/* City nodes are neutral infrastructure; only real citizen data carries AQI
+          colour. The cohort that trains the shared model is filled ochre, the same
+          colour the federation uses in the loss chart. */}
+      {CITIES.map((c) => {
+        const cohort = isCohort(c.key)
+        return (
+          <CircleMarker
+            key={c.key}
+            center={[c.lat, c.lon]}
+            radius={cohort ? 8 : 5}
+            pathOptions={{
+              color: SOOT,
+              weight: cohort ? 2 : 1.4,
+              fillColor: cohort ? OCHRE : PANEL,
+              fillOpacity: 1,
+            }}
+          >
+            <Tooltip className="vayu-tooltip" direction="top">
+              <span className="font-semibold">{c.label}</span> ·{' '}
+              {cohort ? 'federated cohort node' : 'city node'}
+            </Tooltip>
+          </CircleMarker>
+        )
+      })}
       {reports.map((r) => (
         <CircleMarker
           key={r.id}
@@ -74,7 +75,7 @@ export default function MapView({ reports }: Props) {
             <div>
               Confidence <span className="tnum">{(r.confidence * 100).toFixed(0)}%</span>
             </div>
-            <div className="capitalize">{r.city}</div>
+            <div>{cityLabel(r.city)}</div>
           </Tooltip>
         </CircleMarker>
       ))}

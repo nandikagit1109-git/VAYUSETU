@@ -5,6 +5,7 @@ import threading
 from fastapi import APIRouter
 from sqlmodel import col, select
 
+from ..config import CITIES
 from ..db import get_session
 from ..models import Alert, utcnow
 from ..services import forecast_model
@@ -57,13 +58,13 @@ def acknowledge_alert(alert_id: int):
 
 @router.post("/check")
 def check_alerts():
-    """Reads the latest forecast for all 3 cities; if any point in the next
-    24h crosses a GRAP threshold and no un-acknowledged alert exists for that
-    city+severity, creates new Alert rows. Called on load + every 30s."""
+    """Reads the latest forecast for every city in the network; if any point in
+    the next 24h crosses a GRAP threshold and no un-acknowledged alert exists for
+    that city+severity, creates new Alert rows. Called on load + every 30s."""
     created = 0
     with _check_lock:
         try:
-            for city in ("delhi", "kanpur", "pune"):
+            for city in CITIES:
                 try:
                     fc = forecast_model.get_forecast(city)
                 except Exception as exc:

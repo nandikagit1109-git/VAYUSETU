@@ -18,7 +18,7 @@ import torch
 from flwr.common import Parameters, parameters_to_ndarrays
 from flwr.server.strategy import FedAvg
 
-from ..config import DATA_DIR
+from ..config import DATA_DIR, FEDERATED_CITIES
 from .model import AQI_SCALE, INPUT_LEN, AQIMLP, set_params
 
 logger = logging.getLogger("vayusetu.fl.server")
@@ -84,7 +84,7 @@ class StatusRecorder:
         model.eval()
         losses = []
         with torch.no_grad():
-            for city in ("delhi", "kanpur", "pune"):
+            for city in FEDERATED_CITIES:
                 X, y = self.validation_set(city)
                 losses.append(float(torch.nn.functional.mse_loss(model(X), y)))
         return float(np.mean(losses)) if losses else 0.0

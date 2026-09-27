@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 
-from ..config import DATA_DIR
+from ..config import CITIES, DATA_DIR
 
 logger = logging.getLogger("vayusetu.forecast_model")
 
@@ -100,8 +100,7 @@ def get_forecast(city: str) -> dict:
     """Train (once) and run the forecast for a city. Raises
     ForecastUnavailable for unknown cities or unusable data."""
     city = city.strip().lower()
-    known = {"delhi", "kanpur", "pune"}
-    if city not in known:
+    if city not in CITIES:
         raise ForecastUnavailable(f"no forecast model for city '{city}'")
     if city not in _cache:
         try:

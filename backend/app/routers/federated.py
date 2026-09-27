@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from ..config import BACKEND_DIR
+from ..config import BACKEND_DIR, FEDERATED_CITIES
 
 logger = logging.getLogger("vayusetu.federated")
 router = APIRouter(prefix="/api/federated", tags=["federated"])
@@ -38,9 +38,7 @@ def read_status() -> dict:
             {
                 "round": int(r["round"]),
                 "client_losses": {
-                    "delhi": float(r.get("client_losses", {}).get("delhi", 0.0)),
-                    "kanpur": float(r.get("client_losses", {}).get("kanpur", 0.0)),
-                    "pune": float(r.get("client_losses", {}).get("pune", 0.0)),
+                    c: float(r.get("client_losses", {}).get(c, 0.0)) for c in FEDERATED_CITIES
                 },
                 "global_loss": float(r.get("global_loss", 0.0)),
             }
