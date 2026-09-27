@@ -2,6 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   VayuSetu palette, grounded in the subject: air, smog, soot, ember.
+   Declared once here as tokens; components consume these, never raw hex.
+   Deliberately no blue / purple / black / green / neon / pastel surface.
+   One warm accent (ochre) carries the product; one hot accent (ember) is
+   reserved for the one or two things that matter most (Severe, live global
+   loss, active hotspots).
+--------------------------------------------------------------------------- */
+:root {
+  /* base: warm off-white, the colour of sky seen through thin particulate haze (never pure white) */
+  --haze: #e7e1d6;
+  /* panel: a breath lighter than base, so raised surfaces read as a cleaner patch of sky without any drop shadow */
+  --panel: #f2eee6;
+  /* soot: warm charcoal (ash/soot) for text, hairlines and structural ink; not blue-black, not pure black */
+  --soot: #211e1a;
+  /* ash: warm mid-grey (suspended ash) for secondary text, inactive tabs and chart gridlines */
+  --ash: #7c7367;
+  /* ochre: dusty ochre/amber-brown, sunlight diffused through dust; the single primary accent */
+  --ochre: #b0763a;
+  /* ember: deep burnt ember/rust, hotspot fire and the most severe AQI; used sparingly */
+  --ember: #9e3b18;
+
+  /* AQI severity ramp: heat rises with severity, kept entirely inside the warm family (not a rainbow) */
+  --sev-moderate: #c6b184; /* pale dust */
+  --sev-poor: #c08a3e; /* ochre-amber */
+  --sev-very-poor: #b0552a; /* burnt orange */
+  --sev-severe: #7e2d14; /* charred rust */
+
+  /* hairlines stand in for shadows: soot at low alpha */
+  --hairline: rgba(33, 30, 26, 0.14);
+  --hairline-strong: rgba(33, 30, 26, 0.3);
+}
+
+/* Self-hosted, OFL-licensed faces vendored in /public/fonts so the distinctive
+   typography still renders with wifi off (no CDN <link>, no system-font cop-out). */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/bricolage-grotesque-latin-wght-normal.woff2') format('woff2');
+  font-weight: 200 800; /* variable weight axis */
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/ibm-plex-sans-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/ibm-plex-sans-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/ibm-plex-sans-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 html,
 body,
 #root {
@@ -9,25 +87,128 @@ body,
 }
 
 body {
-  @apply bg-slate-950 text-slate-100 antialiased;
+  background: var(--haze);
+  color: var(--soot);
+  font-family: 'IBM Plex Sans', ui-sans-serif, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Offline-safe: tiles may not load without wifi; keep the map area legible. */
+/* The display face gives headings a point of view; body/UI stays quiet and technical. */
+h1,
+h2,
+h3 {
+  font-family: 'Bricolage Grotesque', 'IBM Plex Sans', sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Numeric instrument readouts: AQI values, loss figures, round counters, timestamps. */
+.tnum {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Keep prose under a comfortable measure. */
+.measure {
+  max-width: 66ch;
+}
+
+::selection {
+  background: var(--ochre);
+  color: var(--panel);
+}
+
+/* One quiet, deliberate interaction accent: an ochre focus ring. */
+:focus-visible {
+  outline: 2px solid var(--ochre);
+  outline-offset: 2px;
+}
+
+/* Offline-safe: tiles may not paint without wifi; keep the map bed warm and legible. */
 .leaflet-container {
   height: 100%;
   width: 100%;
-  background: #1e293b;
+  background: #ded6c8;
   font: inherit;
 }
 
+/* Warm map tooltip: hairline border, no shadow, no arrow nib. */
 .leaflet-tooltip.vayu-tooltip {
-  background: #0f172a;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: var(--panel);
+  color: var(--soot);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
   box-shadow: none;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px 8px;
+}
+.leaflet-tooltip.vayu-tooltip::before {
+  display: none;
 }
 
+/* Custom wind-direction marker: a drawn SVG chevron, not an icon-font dingbat. */
 .wind-arrow-icon {
   background: transparent;
   border: none;
+}
+
+/* Strip Leaflet's default control chrome so it sits flat in the warm UI. */
+.leaflet-bar {
+  border: 1px solid var(--hairline-strong);
+  box-shadow: none;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--panel);
+  color: var(--soot);
+  border-bottom: 1px solid var(--hairline);
+}
+.leaflet-control-attribution {
+  background: rgba(242, 238, 230, 0.82) !important;
+  color: var(--ash);
+  font-size: 10px;
+}
+.leaflet-control-attribution a {
+  color: var(--ochre);
+}
+
+/* ---------------------------------------------------------------------------
+   Shared primitives. These enforce the house rules in one place: surfaces are
+   panel-on-haze separated by hairlines (never shadows), corners are small and
+   deliberate, hover is a quiet colour shift (never a lift/scale/shadow), and
+   the ochre/ember accents are reserved for data and status, not button fills.
+--------------------------------------------------------------------------- */
+@layer components {
+  .panel {
+    @apply rounded-md border border-hairline bg-panel;
+  }
+  .label {
+    @apply mb-1 block text-[11px] font-medium uppercase tracking-[0.08em] text-ash;
+  }
+  .field {
+    @apply w-full rounded-sm border border-hairline-strong bg-haze px-3 py-2 text-sm text-soot transition-colors focus:border-ochre focus:outline-none;
+  }
+  /* Primary control: neutral soot fill so the warm accents stay reserved for data/status. */
+  .btn-primary {
+    @apply rounded-sm bg-soot px-4 py-2 text-sm font-medium text-panel transition-colors hover:bg-[#332d25] disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  /* Secondary control: hairline outline on panel. */
+  .btn-quiet {
+    @apply rounded-sm border border-hairline-strong bg-panel px-3 py-1.5 text-xs font-medium text-soot transition-colors hover:bg-haze disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .note {
+    @apply rounded-sm border border-hairline bg-haze px-3 py-2 text-xs text-ash;
+  }
+  /* Error / warning surface: ember tint, no red-500, no shadow. */
+  .banner-warn {
+    border: 1px solid rgba(158, 59, 24, 0.4);
+    background: rgba(158, 59, 24, 0.08);
+    color: var(--ember);
+    @apply rounded-sm px-3 py-2 text-xs;
+  }
 }

@@ -9,6 +9,12 @@ const CITIES = [
   { value: 'pune', label: 'Pune' },
 ]
 
+const AXIS = '#7c7367'
+const GRID = 'rgba(33, 30, 26, 0.10)'
+const MONO = "'IBM Plex Mono', ui-monospace, monospace"
+const PREDICTED = '#9e3b18' // ember line: the forecast itself
+const BAND = '#b0763a' // ochre band: the model's uncertainty
+
 function timeLabel(iso: string): string {
   // "2026-08-30T13:00:00+00:00" -> "08-30 13h" (deterministic, locale-free)
   const m = iso.match(/^\d{4}-(\d{2}-\d{2})T(\d{2})/)
@@ -18,21 +24,24 @@ function timeLabel(iso: string): string {
 export default function ForecastChart() {
   const [city, setCity] = useState('delhi')
   const [points, setPoints] = useState<ForecastPointOut[] | null>(null)
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const cityLabel = CITIES.find((c) => c.value === city)?.label ?? city
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setError(null)
-    setPendingMessage(null)
+    setPending(false)
     getForecast(city)
       .then((res) => {
         if (!active) return
         if (res.error) {
+          // Show our own specific pending copy rather than echoing the raw message.
           setPoints(null)
-          setPendingMessage(res.message ?? 'Forecast pending — model not trained yet.')
+          setPending(true)
         } else {
           setPoints(res.points ?? [])
         }
@@ -55,49 +64,64 @@ export default function ForecastChart() {
   }))
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="panel p-5">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">72-Hour AQI Forecast</h2>
-          <p className="text-xs text-slate-400">Per-city trained time-series model with 80% confidence band.</p>
+          <h2 className="font-display text-lg font-bold text-soot">72-hour AQI forecast</h2>
+          <p className="mt-1 text-xs text-ash">Per-city trained time-series model with an 80% confidence band.</p>
         </div>
-        <select
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
-        >
-          {CITIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
+        <div>
+          <label className="label" htmlFor="forecast-city">
+            City
+          </label>
+          <select id="forecast-city" value={city} onChange={(e) => setCity(e.target.value)} className="field w-40">
+            {CITIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="h-[340px]">
         {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-500">Loading forecast…</div>
+          <div className="flex h-full items-center justify-center text-sm text-ash">Loading {cityLabel} forecast…</div>
         ) : error ? (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-red-300">{error}</div>
-        ) : pendingMessage ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-400">
-            <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400" />
-            Forecast pending — {pendingMessage}
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-ember">{error}</div>
+        ) : pending ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+            <span className="text-sm text-soot">Forecast pending for {cityLabel}.</span>
+            <span className="text-xs text-ash">The time-series model for this city has not finished training yet.</span>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-500">No forecast points available.</div>
+          <div className="flex h-full items-center justify-center text-sm text-ash">No forecast points available.</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} minTickGap={48} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 12 }} domain={[0, 500]} label={{ value: 'AQI', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                formatter={(value) => (Array.isArray(value) ? [`${value[0]} – ${value[1]}`, '80% band'] : [value, 'Predicted AQI'])}
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+              <XAxis dataKey="time" stroke={AXIS} tick={{ fontSize: 11, fill: AXIS, fontFamily: MONO }} minTickGap={48} />
+              <YAxis
+                stroke={AXIS}
+                tick={{ fontSize: 11, fill: AXIS, fontFamily: MONO }}
+                domain={[0, 500]}
+                label={{ value: 'AQI', angle: -90, position: 'insideLeft', fill: AXIS, fontSize: 11 }}
               />
-              <Area dataKey="band" stroke="none" fill="#475569" fillOpacity={0.45} isAnimationActive={false} />
-              <Line type="monotone" dataKey="predicted" stroke="#38bdf8" strokeWidth={2.5} dot={false} animationDuration={300} />
+              <Tooltip
+                contentStyle={{
+                  background: '#f2eee6',
+                  border: '1px solid rgba(33,30,26,0.3)',
+                  borderRadius: 3,
+                  fontSize: 12,
+                  color: '#211e1a',
+                  boxShadow: 'none',
+                }}
+                formatter={(value) =>
+                  Array.isArray(value) ? [`${value[0]} to ${value[1]}`, '80% band'] : [value, 'Predicted AQI']
+                }
+              />
+              <Area dataKey="band" stroke="none" fill={BAND} fillOpacity={0.16} isAnimationActive={false} />
+              <Line type="monotone" dataKey="predicted" stroke={PREDICTED} strokeWidth={2.5} dot={false} animationDuration={300} />
             </ComposedChart>
           </ResponsiveContainer>
         )}

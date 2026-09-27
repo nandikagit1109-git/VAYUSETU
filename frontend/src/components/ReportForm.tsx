@@ -54,8 +54,15 @@ export default function ReportForm({ onCreated }: Props) {
 
     const latitude = Number(lat)
     const longitude = Number(lon)
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-      setError('Latitude/longitude must be valid numbers.')
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      setError('Latitude and longitude must be valid numbers.')
       return
     }
     if (!photoBase64 && !visibility) {
@@ -97,17 +104,20 @@ export default function ReportForm({ onCreated }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h2 className="mb-1 text-lg font-semibold">Citizen Report</h2>
-      <p className="mb-4 text-xs text-slate-400">
-        Submit a sky photo or a manual visibility reading — you get an instant haze/AQI-proxy score and a pin on the map.
+    <form onSubmit={handleSubmit} className="panel p-5">
+      <h2 className="font-display text-lg font-bold text-soot">Citizen Report</h2>
+      <p className="measure mt-1 mb-4 text-xs leading-relaxed text-ash">
+        Submit a sky photo or a manual visibility reading. You get an instant haze/AQI-proxy score and a pin on the map.
       </p>
 
-      <label className="mb-1 block text-xs font-medium text-slate-300">City</label>
+      <label className="label" htmlFor="report-city">
+        City
+      </label>
       <select
+        id="report-city"
         value={city}
         onChange={(e) => handleCityChange(e.target.value)}
-        className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+        className="field mb-3"
       >
         {Object.keys(CITY_COORDS).map((c) => (
           <option key={c} value={c}>
@@ -118,65 +128,74 @@ export default function ReportForm({ onCreated }: Props) {
 
       <div className="mb-3 grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-300">Latitude</label>
+          <label className="label" htmlFor="report-lat">
+            Latitude
+          </label>
           <input
+            id="report-lat"
+            className="field tnum"
             type="number"
             step="any"
             value={lat}
             onChange={(e) => setLat(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-300">Longitude</label>
+          <label className="label" htmlFor="report-lon">
+            Longitude
+          </label>
           <input
+            id="report-lon"
+            className="field tnum"
             type="number"
             step="any"
             value={lon}
             onChange={(e) => setLon(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
           />
         </div>
       </div>
 
-      <label className="mb-1 block text-xs font-medium text-slate-300">Sky photo (optional)</label>
+      <label className="label" htmlFor="report-photo-input">
+        Sky photo (optional)
+      </label>
       <input
         id="report-photo-input"
         type="file"
         accept="image/*"
         onChange={(e) => handlePhoto(e.target.files?.[0] ?? null)}
-        className="mb-3 w-full text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:text-slate-100 hover:file:bg-slate-600"
+        className="mb-3 w-full text-xs text-ash file:mr-3 file:cursor-pointer file:rounded-sm file:border file:border-hairline-strong file:bg-panel file:px-3 file:py-2 file:text-xs file:font-medium file:text-soot hover:file:bg-haze"
       />
-      {photoName && <p className="mb-3 -mt-2 text-xs text-slate-500">Selected: {photoName}</p>}
+      {photoName && <p className="mb-3 -mt-1 text-xs text-ash">Selected: {photoName}</p>}
 
-      <label className="mb-1 block text-xs font-medium text-slate-300">Manual visibility (optional)</label>
+      <label className="label" htmlFor="report-visibility">
+        Manual visibility (optional)
+      </label>
       <select
+        id="report-visibility"
         value={visibility}
         onChange={(e) => setVisibility(e.target.value as Visibility)}
-        className="mb-4 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+        className="field mb-4"
       >
-        <option value="">— not provided —</option>
+        <option value="">Not provided</option>
         <option value="clear">Clear</option>
         <option value="hazy">Hazy</option>
         <option value="very_hazy">Very hazy</option>
       </select>
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
-      >
+      <button type="submit" disabled={submitting} className="btn-primary w-full">
         {submitting ? 'Scoring…' : 'Submit report'}
       </button>
 
-      {error && <div className="mt-3 rounded-lg border border-red-800 bg-red-950/60 px-3 py-2 text-xs text-red-300">{error}</div>}
+      {error && <div className="banner-warn mt-3">{error}</div>}
       {result && (
-        <div className="mt-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs">
-          <span className="font-semibold text-slate-100">Report #{result.id} scored:</span>{' '}
-          <span className="font-semibold" style={{ color: hazeColor(result.haze_score) }}>
+        <div className="note mt-3">
+          <span className="font-semibold text-soot">Report #{result.id} scored:</span>{' '}
+          <span className="tnum font-semibold" style={{ color: hazeColor(result.haze_score) }}>
             haze {result.haze_score.toFixed(0)} / 500
           </span>{' '}
-          <span className="text-slate-400">· confidence {(result.confidence * 100).toFixed(0)}% · pin added to map</span>
+          <span className="text-ash">
+            · confidence <span className="tnum">{(result.confidence * 100).toFixed(0)}%</span> · pin added to map
+          </span>
         </div>
       )}
     </form>

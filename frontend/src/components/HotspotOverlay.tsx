@@ -6,6 +6,10 @@ import type { Hotspot } from '../types'
 import { CITY_COORDS, CITY_LABELS } from './MapView'
 
 const ARROW_LENGTH_KM = 90
+const SOOT = '#211e1a'
+const PANEL = '#f2eee6'
+const WIND_INK = '#3b342c' // warm dark ink for the wind vector, so it reads over light tiles
+const PLUME = '#b0763a' // ochre dashed plume path
 
 function destPoint(lat: number, lon: number, bearingDeg: number, distKm: number): [number, number] {
   const rad = (d: number) => (d * Math.PI) / 180
@@ -14,21 +18,40 @@ function destPoint(lat: number, lon: number, bearingDeg: number, distKm: number)
   return [lat + dLat, lon + dLon]
 }
 
-function arrowIcon(bearingDeg: number, color: string): L.DivIcon {
-  // The ➤ glyph points east (90° compass), so rotate by bearing-90.
+// A drawn arrowhead pointing north, rotated to the wind bearing (compass degrees
+// are clockwise from north, matching CSS rotate). Custom SVG, not an icon glyph.
+function windArrowSvg(size: number, rotate: number): string {
+  return (
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" ` +
+    `style="transform:rotate(${rotate}deg)"><path d="M12 2.5 L20 21 L12 16.5 L4 21 Z" ` +
+    `fill="${WIND_INK}" stroke="${PANEL}" stroke-width="1.2" stroke-linejoin="round"/></svg>`
+  )
+}
+
+function windArrowIcon(bearingDeg: number): L.DivIcon {
   return L.divIcon({
     className: 'wind-arrow-icon',
-    html: `<div style="transform:rotate(${bearingDeg - 90}deg);color:${color};font-size:18px;line-height:20px;text-align:center;">➤</div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
+    html: windArrowSvg(18, bearingDeg),
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
   })
 }
 
+// Inline React version of the same arrowhead, for the legend (points north).
+function WindGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.5 L20 21 L12 16.5 L4 21 Z" fill={WIND_INK} stroke={PANEL} strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// Cause colours stay inside the warm dust/soot/ember family (no violet, no rainbow).
 const CAUSE_META: Record<string, { color: string; label: string }> = {
-  stubble_burning: { color: '#fb923c', label: 'Stubble burning' },
-  industrial: { color: '#ef4444', label: 'Industrial' },
-  vehicular: { color: '#a78bfa', label: 'Vehicular' },
-  unknown: { color: '#94a3b8', label: 'Unknown' },
+  stubble_burning: { color: '#9e3b18', label: 'Stubble burning' },
+  industrial: { color: '#6e5a46', label: 'Industrial' },
+  vehicular: { color: '#a89880', label: 'Vehicular' },
+  unknown: { color: '#7c7367', label: 'Unknown' },
 }
 
 export default function HotspotOverlay() {
@@ -50,13 +73,15 @@ export default function HotspotOverlay() {
   }, [])
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h2 className="mb-1 text-lg font-semibold">Emission Hotspots & Wind Transport</h2>
-      <p className="mb-3 text-xs text-slate-400">
-        Simulated satellite hotspots with wind vectors (arrow = wind direction) and dashed plume paths to the downwind city.
+    <div className="panel p-5">
+      <h2 className="font-display text-lg font-bold text-soot">Emission hotspots and wind transport</h2>
+      <p className="measure mt-1 mb-3 text-xs leading-relaxed text-ash">
+        Simulated satellite hotspots with wind vectors. The arrow shows the direction the wind is blowing toward, and
+        the dashed line traces the plume to the downwind city.
       </p>
-      {error && <div className="mb-3 rounded-lg border border-red-800 bg-red-950/60 px-3 py-2 text-xs text-red-300">{error}</div>}
-      <div className="h-[480px] overflow-hidden rounded-lg">
+      {error && <div className="banner-warn mb-3">{error}</div>}
+
+      <div className="h-[520px] overflow-hidden rounded-sm border border-hairline">
         <MapContainer center={[28.6, 77.6]} zoom={6} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -67,10 +92,10 @@ export default function HotspotOverlay() {
               key={city}
               center={pos}
               radius={8}
-              pathOptions={{ color: '#e2e8f0', fillColor: '#0ea5e9', fillOpacity: 0.9, weight: 2 }}
+              pathOptions={{ color: SOOT, weight: 2, fillColor: PANEL, fillOpacity: 1 }}
             >
               <Tooltip className="vayu-tooltip" direction="top">
-                {CITY_LABELS[city] ?? city}
+                <span className="font-semibold">{CITY_LABELS[city] ?? city}</span> · city node
               </Tooltip>
             </CircleMarker>
           ))}
@@ -83,30 +108,37 @@ export default function HotspotOverlay() {
                 <CircleMarker
                   center={[h.latitude, h.longitude]}
                   radius={7}
-                  pathOptions={{ color: '#0f172a', fillColor: meta.color, fillOpacity: 0.95, weight: 1 }}
+                  pathOptions={{ color: SOOT, weight: 1, fillColor: meta.color, fillOpacity: 1 }}
                 >
                   <Tooltip className="vayu-tooltip" direction="top">
-                    <div>
-                      <div className="font-semibold">{meta.label} hotspot #{h.id}</div>
-                      <div>Confidence: {(h.confidence * 100).toFixed(0)}%</div>
-                      <div>Wind: {h.wind_speed_kmh} km/h toward {h.wind_direction_deg}°</div>
-                      {h.downwind_city && (
-                        <div>
-                          Downwind: {CITY_LABELS[h.downwind_city] ?? h.downwind_city} · ETA {h.eta_hours ?? '—'} h
-                        </div>
-                      )}
+                    <div className="font-semibold">
+                      {meta.label} hotspot #{h.id}
                     </div>
+                    <div>
+                      Confidence <span className="tnum">{(h.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <div>
+                      Wind <span className="tnum">{h.wind_speed_kmh}</span> km/h toward{' '}
+                      <span className="tnum">{h.wind_direction_deg}°</span>
+                    </div>
+                    {h.downwind_city && (
+                      <div>
+                        Downwind {CITY_LABELS[h.downwind_city] ?? h.downwind_city} · ETA{' '}
+                        <span className="tnum">{h.eta_hours ?? 'n/a'}</span> h
+                      </div>
+                    )}
                   </Tooltip>
                 </CircleMarker>
-                <Polyline positions={[[h.latitude, h.longitude], arrowEnd]} pathOptions={{ color: '#38bdf8', weight: 2.5 }} />
-                <Marker position={arrowEnd} icon={arrowIcon(h.wind_direction_deg, '#38bdf8')} />
+                <Polyline positions={[[h.latitude, h.longitude], arrowEnd]} pathOptions={{ color: WIND_INK, weight: 2, opacity: 0.85 }} />
+                <Marker position={arrowEnd} icon={windArrowIcon(h.wind_direction_deg)} />
                 {downwindPos && (
                   <Polyline
                     positions={[[h.latitude, h.longitude], downwindPos]}
-                    pathOptions={{ color: '#fbbf24', weight: 2, dashArray: '6 6', opacity: 0.85 }}
+                    pathOptions={{ color: PLUME, weight: 2, dashArray: '6 6', opacity: 0.9 }}
                   >
                     <Tooltip className="vayu-tooltip" sticky>
-                      Plume path → {CITY_LABELS[h.downwind_city!] ?? h.downwind_city} · ETA {h.eta_hours ?? '—'} h
+                      Plume path to {CITY_LABELS[h.downwind_city!] ?? h.downwind_city} · ETA{' '}
+                      <span className="tnum">{h.eta_hours ?? 'n/a'}</span> h
                     </Tooltip>
                   </Polyline>
                 )}
@@ -115,18 +147,21 @@ export default function HotspotOverlay() {
           })}
         </MapContainer>
       </div>
-      <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ash">
         {Object.values(CAUSE_META).map((m) => (
           <span key={m.label} className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: m.color }} />
+            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: m.color }} aria-hidden="true" />
             {m.label}
           </span>
         ))}
         <span className="inline-flex items-center gap-1.5">
-          <span style={{ color: '#38bdf8' }}>➤</span> wind direction
+          <WindGlyph />
+          wind direction
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-6 border-t-2 border-dashed border-amber-400" /> plume path to downwind city
+          <span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: PLUME }} aria-hidden="true" />
+          plume path to downwind city
         </span>
       </div>
     </div>

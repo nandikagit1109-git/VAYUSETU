@@ -4,6 +4,21 @@ import { getFederatedStatus, runFederated } from '../api'
 import type { FederatedStatus } from '../types'
 
 const POLL_MS = 2000
+const TOTAL_ROUNDS = 8
+
+// Series colours stay inside the warm family and are separated by lightness plus
+// dash pattern, so the four lines stay distinct without a rainbow. The aggregated
+// global line is the ember accent: it is the thing this panel is really about.
+const SERIES = {
+  Delhi: { stroke: '#b0763a', dash: undefined, width: 2 }, // ochre
+  Kanpur: { stroke: '#6e5a46', dash: '6 3', width: 2 }, // dark warm brown
+  Pune: { stroke: '#a89880', dash: '2 3', width: 2 }, // pale dust-brown
+  Global: { stroke: '#9e3b18', dash: undefined, width: 3 }, // ember accent
+} as const
+
+const AXIS = { stroke: '#7c7367', tickFill: '#7c7367' }
+const GRID = 'rgba(33, 30, 26, 0.10)'
+const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 
 export default function FederatedPanel() {
   const [status, setStatus] = useState<FederatedStatus | null>(null)
@@ -53,6 +68,8 @@ export default function FederatedPanel() {
   }
 
   const rounds = status?.rounds ?? []
+  const done = rounds.length
+  const running = status?.status === 'running'
   const chartData = rounds.map((r) => ({
     round: r.round,
     Delhi: r.client_losses.delhi,
@@ -61,69 +78,89 @@ export default function FederatedPanel() {
     Global: r.global_loss,
   }))
 
-  const statusLabel =
-    status?.status === 'running'
-      ? `Training… round ${rounds.length || 0}/8`
-      : status?.status === 'completed'
-        ? `Completed (${rounds.length} rounds)`
-        : 'Idle'
+  // The status dot is a plain, static indicator; the live round counter and the
+  // chart filling in are the real "loading" signal (no shimmering placeholder).
+  const dotColor = running ? 'bg-ember' : status?.status === 'completed' ? 'bg-ochre' : 'bg-ash'
+  const statusLabel = running
+    ? `Training, round ${done} of ${TOTAL_ROUNDS}`
+    : status?.status === 'completed'
+      ? `Completed, ${done} rounds`
+      : 'Idle'
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h2 className="mb-1 text-lg font-semibold">Federated Learning</h2>
-        <p className="mb-4 text-xs leading-relaxed text-slate-400">
-          Three city nodes (Delhi, Kanpur, Pune) train a shared next-hour AQI model with Flower FedAvg.
-          Raw data never leaves a city — only model weight updates are aggregated. 8 rounds, ~30 seconds.
+    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="panel flex flex-col p-5">
+        <h2 className="font-display text-lg font-bold text-soot">Federated Learning</h2>
+        <p className="measure mt-1 mb-4 text-xs leading-relaxed text-ash">
+          Three city nodes (Delhi, Kanpur, Pune) train a shared next-hour AQI model with Flower FedAvg. Raw data never
+          leaves a city; only model weight updates are aggregated. Runs {TOTAL_ROUNDS} rounds.
         </p>
-        <button
-          onClick={handleStart}
-          disabled={starting || status?.status === 'running'}
-          className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {status?.status === 'running' ? 'Training in progress…' : starting ? 'Starting…' : 'Start Federated Training'}
+        <button onClick={handleStart} disabled={starting || running} className="btn-primary w-full">
+          {running ? 'Training in progress' : starting ? 'Starting…' : 'Start Federated Training'}
         </button>
+
         <div className="mt-4 flex items-center gap-2 text-sm">
-          <span
-            className={`inline-block h-2.5 w-2.5 rounded-full ${
-              status?.status === 'running'
-                ? 'animate-pulse bg-amber-400'
-                : status?.status === 'completed'
-                  ? 'bg-emerald-400'
-                  : 'bg-slate-500'
-            }`}
-          />
-          <span className="text-slate-300">{statusLabel}</span>
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${dotColor}`} aria-hidden="true" />
+          <span className="text-soot">{statusLabel}</span>
         </div>
         {status?.started_at && (
-          <p className="mt-2 text-xs text-slate-500">Started: {new Date(status.started_at).toLocaleTimeString()}</p>
+          <p className="tnum mt-2 text-xs text-ash">Started {new Date(status.started_at).toLocaleTimeString()}</p>
         )}
         {status?.completed_at && (
-          <p className="text-xs text-slate-500">Completed: {new Date(status.completed_at).toLocaleTimeString()}</p>
+          <p className="tnum text-xs text-ash">Completed {new Date(status.completed_at).toLocaleTimeString()}</p>
         )}
-        {error && <div className="mt-3 rounded-lg border border-red-800 bg-red-950/60 px-3 py-2 text-xs text-red-300">{error}</div>}
+        {error && <div className="banner-warn mt-3">{error}</div>}
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 text-sm font-semibold text-slate-200">Loss convergence (local per-city + aggregated global)</h3>
-        <div className="h-[420px]">
-          {rounds.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              {status?.status === 'running' ? 'Waiting for the first round…' : 'Press “Start Federated Training” to begin.'}
+      <div className="panel p-5">
+        <h3 className="mb-3 font-display text-sm font-bold text-soot">
+          Loss convergence · local per-city and aggregated global
+        </h3>
+        <div className="h-[460px]">
+          {done === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+              <span className="text-sm text-soot">
+                {running ? 'Waiting for round 1 to report in.' : 'No training run yet.'}
+              </span>
+              <span className="measure text-xs text-ash">
+                {running
+                  ? 'The chart fills in live as each round completes.'
+                  : 'Press Start Federated Training and the loss curves below converge round by round.'}
+              </span>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              {/* Chart stays mounted across polls — only its data prop updates (no flicker). */}
+              {/* Chart stays mounted across polls; only its data prop updates, so the live fill is smooth (no flicker). */}
               <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="round" stroke="#64748b" tick={{ fontSize: 12 }} label={{ value: 'Round', position: 'insideBottomRight', offset: -4, fill: '#64748b', fontSize: 12 }} />
-                <YAxis stroke="#64748b" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: 'MSE loss', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 12 }} />
-                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="Delhi" stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} animationDuration={300} />
-                <Line type="monotone" dataKey="Kanpur" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3 }} animationDuration={300} />
-                <Line type="monotone" dataKey="Pune" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} animationDuration={300} />
-                <Line type="monotone" dataKey="Global" stroke="#38bdf8" strokeWidth={3} strokeDasharray="6 3" dot={false} animationDuration={300} />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+                <XAxis
+                  dataKey="round"
+                  stroke={AXIS.stroke}
+                  tick={{ fontSize: 11, fill: AXIS.tickFill, fontFamily: MONO }}
+                  label={{ value: 'Round', position: 'insideBottomRight', offset: -4, fill: AXIS.tickFill, fontSize: 11 }}
+                />
+                <YAxis
+                  stroke={AXIS.stroke}
+                  tick={{ fontSize: 11, fill: AXIS.tickFill, fontFamily: MONO }}
+                  domain={[0, 'auto']}
+                  label={{ value: 'MSE loss', angle: -90, position: 'insideLeft', fill: AXIS.tickFill, fontSize: 11 }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: '#f2eee6',
+                    border: '1px solid rgba(33,30,26,0.3)',
+                    borderRadius: 3,
+                    fontSize: 12,
+                    color: '#211e1a',
+                    boxShadow: 'none',
+                  }}
+                  labelFormatter={(v) => `Round ${v}`}
+                />
+                <Legend wrapperStyle={{ fontSize: 12, color: '#211e1a' }} />
+                <Line type="monotone" dataKey="Delhi" stroke={SERIES.Delhi.stroke} strokeWidth={SERIES.Delhi.width} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={300} />
+                <Line type="monotone" dataKey="Kanpur" stroke={SERIES.Kanpur.stroke} strokeWidth={SERIES.Kanpur.width} strokeDasharray={SERIES.Kanpur.dash} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={300} />
+                <Line type="monotone" dataKey="Pune" stroke={SERIES.Pune.stroke} strokeWidth={SERIES.Pune.width} strokeDasharray={SERIES.Pune.dash} dot={{ r: 2.5, strokeWidth: 0 }} animationDuration={300} />
+                <Line type="monotone" dataKey="Global" stroke={SERIES.Global.stroke} strokeWidth={SERIES.Global.width} dot={false} animationDuration={300} />
               </LineChart>
             </ResponsiveContainer>
           )}

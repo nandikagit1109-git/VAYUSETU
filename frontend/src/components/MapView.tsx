@@ -13,12 +13,27 @@ export const CITY_LABELS: Record<string, string> = {
   pune: 'Pune',
 }
 
+// AQI-proxy severity ramp. Concrete hexes (Leaflet pathOptions cannot read CSS
+// vars) that mirror the --sev-* tokens in index.css: heat rises with severity,
+// staying inside the warm dust/ochre/ember family instead of a green-to-purple
+// rainbow.
 export function hazeColor(score: number): string {
-  if (score <= 200) return '#22c55e'
-  if (score <= 300) return '#f59e0b'
-  if (score <= 400) return '#ef4444'
-  return '#a855f7'
+  if (score <= 200) return '#c6b184' // Moderate: pale dust
+  if (score <= 300) return '#c08a3e' // Poor: ochre-amber
+  if (score <= 400) return '#b0552a' // Very Poor: burnt orange
+  return '#7e2d14' // Severe: charred rust
 }
+
+export function severityLabel(score: number): string {
+  if (score <= 200) return 'Moderate'
+  if (score <= 300) return 'Poor'
+  if (score <= 400) return 'Very Poor'
+  return 'Severe'
+}
+
+// Structural ink for vector edges so markers stay legible on light OSM tiles.
+const SOOT = '#211e1a'
+const PANEL = '#f2eee6'
 
 interface Props {
   reports: CitizenReport[]
@@ -31,15 +46,16 @@ export default function MapView({ reports }: Props) {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      {/* City nodes are neutral infrastructure; only real citizen data carries AQI colour. */}
       {Object.entries(CITY_COORDS).map(([city, pos]) => (
         <CircleMarker
           key={city}
           center={pos}
           radius={8}
-          pathOptions={{ color: '#e2e8f0', fillColor: '#0ea5e9', fillOpacity: 0.9, weight: 2 }}
+          pathOptions={{ color: SOOT, weight: 2, fillColor: PANEL, fillOpacity: 1 }}
         >
           <Tooltip className="vayu-tooltip" direction="top">
-            {CITY_LABELS[city] ?? city} (city node)
+            <span className="font-semibold">{CITY_LABELS[city] ?? city}</span> · city node
           </Tooltip>
         </CircleMarker>
       ))}
@@ -48,15 +64,17 @@ export default function MapView({ reports }: Props) {
           key={r.id}
           center={[r.latitude, r.longitude]}
           radius={6}
-          pathOptions={{ color: '#0f172a', fillColor: hazeColor(r.haze_score), fillOpacity: 0.9, weight: 1 }}
+          pathOptions={{ color: SOOT, weight: 1, fillColor: hazeColor(r.haze_score), fillOpacity: 1 }}
         >
           <Tooltip className="vayu-tooltip" direction="top">
+            <div className="font-semibold">Citizen report #{r.id}</div>
             <div>
-              <div className="font-semibold">Citizen report #{r.id}</div>
-              <div>Haze score: {r.haze_score.toFixed(0)} / 500</div>
-              <div>Confidence: {(r.confidence * 100).toFixed(0)}%</div>
-              <div>City: {r.city}</div>
+              Haze score <span className="tnum">{r.haze_score.toFixed(0)}</span> / 500 ({severityLabel(r.haze_score)})
             </div>
+            <div>
+              Confidence <span className="tnum">{(r.confidence * 100).toFixed(0)}%</span>
+            </div>
+            <div className="capitalize">{r.city}</div>
           </Tooltip>
         </CircleMarker>
       ))}

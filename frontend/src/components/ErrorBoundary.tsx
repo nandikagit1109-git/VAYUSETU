@@ -23,16 +23,13 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex h-screen items-center justify-center p-8">
-          <div className="max-w-md rounded-xl border border-slate-700 bg-slate-900 p-8 text-center">
-            <h1 className="mb-2 text-xl font-semibold text-slate-100">Something went wrong</h1>
-            <p className="mb-6 text-sm text-slate-400">
-              An unexpected error occurred while rendering this page. Please refresh the browser.
+        <div className="flex h-screen items-center justify-center bg-haze p-8">
+          <div className="panel max-w-md p-8 text-center">
+            <h1 className="font-display text-xl font-bold text-soot">Something went wrong</h1>
+            <p className="measure mx-auto mt-2 mb-6 text-sm text-ash">
+              An unexpected error occurred while rendering this page. Refresh the browser to reload the dashboard.
             </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-            >
+            <button onClick={() => window.location.reload()} className="btn-primary">
               Refresh
             </button>
           </div>
