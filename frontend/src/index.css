@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+}
+
+/* Offline-safe: tiles may not load without wifi; keep the map area legible. */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #1e293b;
+  font: inherit;
+}
+
+.leaflet-tooltip.vayu-tooltip {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  box-shadow: none;
+}
+
+.wind-arrow-icon {
+  background: transparent;
+  border: none;
+}

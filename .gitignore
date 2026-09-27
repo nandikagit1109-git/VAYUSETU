@@ -1,0 +1,16 @@
+# --- runtime artifacts ---
+backend/.venv/
+backend/vayusetu.db
+backend/uploads/
+backend/app/federated/status.json
+backend/app/federated/status.json.tmp
+__pycache__/
+*.pyc
+
+# --- frontend ---
+frontend/node_modules/
+frontend/dist/
+
+# --- env / os ---
+.env
+.DS_Store

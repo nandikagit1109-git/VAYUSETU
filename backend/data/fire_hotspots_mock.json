@@ -1,0 +1,67 @@
+{
+  "hotspots": [
+    {
+      "latitude": 30.7,
+      "longitude": 75.9,
+      "cause": "stubble_burning",
+      "confidence": 0.91,
+      "detected_at": "2026-09-20T06:00:00+00:00"
+    },
+    {
+      "latitude": 30.3,
+      "longitude": 76.2,
+      "cause": "stubble_burning",
+      "confidence": 0.87,
+      "detected_at": "2026-09-20T07:30:00+00:00"
+    },
+    {
+      "latitude": 29.9,
+      "longitude": 75.5,
+      "cause": "stubble_burning",
+      "confidence": 0.83,
+      "detected_at": "2026-09-20T08:15:00+00:00"
+    },
+    {
+      "latitude": 30.5,
+      "longitude": 76.5,
+      "cause": "stubble_burning",
+      "confidence": 0.79,
+      "detected_at": "2026-09-21T05:45:00+00:00"
+    },
+    {
+      "latitude": 30.1,
+      "longitude": 75.2,
+      "cause": "stubble_burning",
+      "confidence": 0.74,
+      "detected_at": "2026-09-21T06:30:00+00:00"
+    },
+    {
+      "latitude": 29.7,
+      "longitude": 76.0,
+      "cause": "stubble_burning",
+      "confidence": 0.68,
+      "detected_at": "2026-09-21T09:00:00+00:00"
+    },
+    {
+      "latitude": 26.5,
+      "longitude": 80.05,
+      "cause": "industrial",
+      "confidence": 0.88,
+      "detected_at": "2026-09-22T04:00:00+00:00"
+    },
+    {
+      "latitude": 26.3,
+      "longitude": 80.0,
+      "cause": "industrial",
+      "confidence": 0.81,
+      "detected_at": "2026-09-22T05:30:00+00:00"
+    },
+    {
+      "latitude": 26.35,
+      "longitude": 79.95,
+      "cause": "industrial",
+      "confidence": 0.72,
+      "detected_at": "2026-09-22T07:00:00+00:00"
+    }
+  ]
+}

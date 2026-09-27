@@ -1,0 +1,28 @@
+{
+  "regions": [
+    {
+      "name": "punjab_haryana",
+      "center_lat": 30.2,
+      "center_lon": 75.9,
+      "radius_km": 320.0,
+      "direction_from_deg": 315.0,
+      "speed_kmh": 14.0
+    },
+    {
+      "name": "kanpur_industrial",
+      "center_lat": 26.45,
+      "center_lon": 80.1,
+      "radius_km": 160.0,
+      "direction_from_deg": 270.0,
+      "speed_kmh": 11.0
+    },
+    {
+      "name": "west_india",
+      "center_lat": 19.0,
+      "center_lon": 73.5,
+      "radius_km": 300.0,
+      "direction_from_deg": 250.0,
+      "speed_kmh": 9.0
+    }
+  ]
+}
