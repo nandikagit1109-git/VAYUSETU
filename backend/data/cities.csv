@@ -1,0 +1,36 @@
+city_id,name,state,latitude,longitude,synthetic_role,synthetic_base_pm25,ncr
+delhi,Delhi,Delhi,28.6139,77.2090,ground,150,1
+gurugram,Gurugram,Haryana,28.4595,77.0266,ground,130,1
+chandigarh,Chandigarh,Chandigarh,30.7333,76.7794,ground,85,0
+ludhiana,Ludhiana,Punjab,30.9010,75.8573,ground,105,0
+amritsar,Amritsar,Punjab,31.6340,74.8723,ground,95,0
+jaipur,Jaipur,Rajasthan,26.9124,75.7873,ground,90,0
+lucknow,Lucknow,Uttar Pradesh,26.8467,80.9462,ground,120,0
+kanpur,Kanpur,Uttar Pradesh,26.4499,80.3319,ground,135,0
+patna,Patna,Bihar,25.5941,85.1376,ground,115,0
+kolkata,Kolkata,West Bengal,22.5726,88.3639,ground,85,0
+bhopal,Bhopal,Madhya Pradesh,23.2599,77.4126,ground,70,0
+nagpur,Nagpur,Maharashtra,21.1458,79.0882,ground,65,0
+ahmedabad,Ahmedabad,Gujarat,23.0225,72.5714,ground,75,0
+mumbai,Mumbai,Maharashtra,19.0760,72.8777,ground,55,0
+pune,Pune,Maharashtra,18.5204,73.8567,ground,50,0
+hyderabad,Hyderabad,Telangana,17.3850,78.4867,ground,55,0
+visakhapatnam,Visakhapatnam,Andhra Pradesh,17.6868,83.2185,ground,50,0
+bengaluru,Bengaluru,Karnataka,12.9716,77.5946,ground,40,0
+chennai,Chennai,Tamil Nadu,13.0827,80.2707,ground,38,0
+kochi,Kochi,Kerala,9.9312,76.2673,ground,32,0
+varanasi,Varanasi,Uttar Pradesh,25.3176,82.9739,aux_only,125,0
+surat,Surat,Gujarat,21.1702,72.8311,aux_only,60,0
+indore,Indore,Madhya Pradesh,22.7196,75.8577,aux_only,62,0
+guwahati,Guwahati,Assam,26.1445,91.7362,aux_only,60,0
+coimbatore,Coimbatore,Tamil Nadu,11.0168,76.9558,aux_only,35,0
+gorakhpur,Gorakhpur,Uttar Pradesh,26.7606,83.3732,none,110,0
+ranchi,Ranchi,Jharkhand,23.3441,85.3096,none,65,0
+raipur,Raipur,Chhattisgarh,21.2514,81.6296,none,80,0
+thiruvananthapuram,Thiruvananthapuram,Kerala,8.5241,76.9366,skip,30,0
+shillong,Shillong,Meghalaya,25.5788,91.8933,skip,25,0
+aizawl,Aizawl,Mizoram,23.7271,92.7176,skip,20,0
+amaravati,Amaravati,Andhra Pradesh,16.5730,80.3575,skip,60,0
+talcher,Talcher,Odisha,20.9500,85.2333,skip,90,0
+brajrajnagar,Brajrajnagar,Odisha,21.8167,83.9167,skip,80,0
+ernakulam,Ernakulam,Kerala,9.9816,76.2999,skip,32,0

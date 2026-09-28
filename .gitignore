@@ -1,11 +1,13 @@
 # --- runtime artifacts ---
 backend/.venv/
 backend/vayusetu.db
-backend/uploads/
-backend/app/federated/status.json
-backend/app/federated/status.json.tmp
+backend/test_vayusetu.db
+backend/verify_tmp.db
+backend/data/processed/
+backend/app/federated/*.json.tmp
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # --- frontend ---
 frontend/node_modules/

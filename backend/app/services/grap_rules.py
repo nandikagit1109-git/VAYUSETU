@@ -1,48 +1,79 @@
-"""Static AQI threshold -> GRAP action mapping.
+# Summarised paraphrase for demonstration. Verify against the latest CAQM GRAP notification before any real-world use.
 
-Severity bands follow CPCB; action text summarises the real GRAP (Graded
-Response Action Plan) stage measures for the demo.
+"""Static action table (section 9.3).
+
+NCR cities (ncr=1 in the registry) use the GRAP framework with stages; all
+other cities get a generic advisory. Action strings are short paraphrases —
+see the notice at the top of this file.
 """
 
-GRAP_ACTIONS = {
-    "Moderate": (
-        "No GRAP stage invoked. Maintain enhanced monitoring, mechanized road "
-        "sweeping and water sprinkling at identified dust hotspots; advise "
-        "residents to reduce prolonged outdoor exertion."
+# GRAP stages by predicted AQI (NCR cities).
+GRAP_STAGES = [
+    (201, 300, "Stage I"),
+    (301, 400, "Stage II"),
+    (401, 450, "Stage III"),
+    (451, 10_000, "Stage IV"),
+]
+
+ADVISORY = "ADVISORY"
+GRAP = "GRAP"
+
+_STAGE_ACTIONS: dict[str, str] = {
+    "Stage I": (
+        "Enforce dust control at construction sites and on roads; ban open burning "
+        "of waste and biomass; increase mechanised sweeping and water sprinkling; "
+        "tighten vehicle emission checks"
     ),
-    "Poor": (
-        "GRAP Stage-I: intensified enforcement against open burning of waste "
-        "and biomass; increased mechanized road cleaning and water sprinkling; "
-        "strict pollution checks at border entry points; regulated entry of "
-        "commercial diesel vehicles; advisory for mask use outdoors."
+    "Stage II": (
+        "All Stage I actions, plus restrict diesel generator use to essential "
+        "services, raise parking fees to discourage private vehicles, and increase "
+        "metro and bus frequency"
     ),
-    "Very Poor": (
-        "GRAP Stage-II: all Stage-I measures plus ban on diesel generator sets "
-        "(except essential services); halt of construction and demolition in "
-        "linear public projects; work-from-home advisory for up to 50% of "
-        "government and private office staff; enhanced public transport service."
+    "Stage III": (
+        "All Stage II actions, plus halt non-essential construction and demolition "
+        "and restrict polluting commercial vehicles"
     ),
-    "Severe": (
-        "GRAP Stage-III/IV: all Stage-II measures plus halt of all construction "
-        "and demolition activity; restriction on BS-III petrol and BS-IV diesel "
-        "vehicles in the NCR; no-entry for trucks except essential commodities; "
-        "closure advisory for schools and institutions; stoppage of industrial "
-        "activity using fossil fuels in hotspots."
+    "Stage IV": (
+        "All Stage III actions, plus stop entry of non-essential trucks and consider "
+        "restrictions on private vehicles and work-from-home for offices"
+    ),
+}
+
+_ADVISORY_ACTIONS: dict[str, str] = {
+    "moderate": (
+        "Public health advisory for sensitive groups; intensify dust suppression; "
+        "enforce the ban on open waste burning"
+    ),
+    "high": (
+        "All of the above, plus notify the state pollution control board to inspect "
+        "nearby industrial and burning hotspots; increase public transport frequency"
+    ),
+    "extreme": (
+        "Emergency health advisory; pause dust-generating construction; deploy "
+        "inspection teams to hotspots"
     ),
 }
 
 
-def severity_for_aqi(aqi: float) -> str:
-    if aqi <= 200:
-        return "Moderate"
-    if aqi <= 300:
-        return "Poor"
-    if aqi <= 400:
-        return "Very Poor"
-    return "Severe"
+def action_for(predicted_aqi: float, ncr: bool) -> tuple[str, str | None, str]:
+    """Returns (action_framework, grap_stage_or_None, action_text)."""
+    if ncr:
+        for lo, hi, stage in GRAP_STAGES:
+            if lo <= predicted_aqi <= hi:
+                return GRAP, stage, _STAGE_ACTIONS[stage]
+        # Below 201 should never reach here (alerts only fire above 200).
+        return GRAP, "Stage I", _STAGE_ACTIONS["Stage I"]
+    if predicted_aqi <= 300:
+        return ADVISORY, None, _ADVISORY_ACTIONS["moderate"]
+    if predicted_aqi <= 400:
+        return ADVISORY, None, _ADVISORY_ACTIONS["high"]
+    return ADVISORY, None, _ADVISORY_ACTIONS["extreme"]
 
 
-def grap_action_for_aqi(aqi: float) -> tuple[str, str]:
-    """Returns (severity, grap_action) for an AQI value."""
-    severity = severity_for_aqi(aqi)
-    return severity, GRAP_ACTIONS[severity]
+def channels_for(severity: str) -> list[str]:
+    """Dashboard always; simulated SMS added for Very Poor and Severe.
+    No real SMS is sent in v2 — the UI labels these as simulated."""
+    chans = ["dashboard"]
+    if severity in ("Very Poor", "Severe"):
+        chans.append("sms_simulated")
+    return chans

@@ -1,131 +1,35 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
-import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
-import { animate, useReducedMotion } from 'framer-motion'
+import { Fragment, useEffect, useState } from 'react'
+import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import { getHotspots } from '../api'
 import type { Hotspot } from '../types'
-import { CITIES, CITY_COORDS, cityLabel, INDIA_BOUNDS, isCohort } from '../cities'
-import { EASE, SmokeRule } from '../motion'
+import { INDIA_BOUNDS } from './MapView'
+import { SmokeRule } from '../motion'
 import TraceWind from './TraceWind'
 
-const ARROW_LENGTH_KM = 90
 const SOOT = '#211e1a'
-const PANEL = '#f2eee6'
-const WIND_INK = '#3b342c' // warm dark ink for the wind vector, so it reads over light tiles
-const OCHRE = '#b0763a' // federation ochre: cohort city nodes and plume paths
-const PLUME = OCHRE
+const WIND_INK = '#3b342c'
+const PLUME = '#b0763a'
 
-function destPoint(lat: number, lon: number, bearingDeg: number, distKm: number): [number, number] {
+// Cause colours stay inside the warm dust/soot/ember family (no rainbow).
+const CAUSE_META: Record<string, { color: string; label: string }> = {
+  stubble_burning: { color: '#9e3b18', label: 'Stubble burning' },
+  open_burning: { color: '#c08a3e', label: 'Open burning' },
+  industrial: { color: '#6e5a46', label: 'Industrial' },
+}
+
+// Short wind arrow drawn toward wind_toward (where the wind blows TO).
+function arrowEnd(lat: number, lon: number, towardDeg: number, km = 90): [number, number] {
   const rad = (d: number) => (d * Math.PI) / 180
-  const dLat = (distKm * Math.cos(rad(bearingDeg))) / 111.0
-  const dLon = (distKm * Math.sin(rad(bearingDeg))) / (111.0 * Math.cos(rad(lat)))
+  const dLat = (km * Math.cos(rad(towardDeg))) / 111.0
+  const dLon = (km * Math.sin(rad(towardDeg))) / (111.0 * Math.cos(rad(lat)))
   return [lat + dLat, lon + dLon]
 }
 
-// A drawn arrowhead pointing north, rotated to the wind bearing (compass degrees
-// are clockwise from north, matching CSS rotate). Custom SVG, not an icon glyph.
-function windArrowSvg(size: number, rotate: number): string {
-  return (
-    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" ` +
-    `style="transform:rotate(${rotate}deg)"><path d="M12 2.5 L20 21 L12 16.5 L4 21 Z" ` +
-    `fill="${WIND_INK}" stroke="${PANEL}" stroke-width="1.2" stroke-linejoin="round"/></svg>`
-  )
+interface Props {
+  onPickCity?: (cityId: string) => void
 }
 
-function windArrowIcon(bearingDeg: number): L.DivIcon {
-  return L.divIcon({
-    className: 'wind-arrow-icon',
-    html: windArrowSvg(18, bearingDeg),
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-  })
-}
-
-// Inline React version of the same arrowhead, for the legend (points north).
-function WindGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 2.5 L20 21 L12 16.5 L4 21 Z" fill={WIND_INK} stroke={PANEL} strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// Cause colours stay inside the warm dust/soot/ember family (no violet, no rainbow).
-const CAUSE_META: Record<string, { color: string; label: string }> = {
-  stubble_burning: { color: '#9e3b18', label: 'Stubble burning' },
-  industrial: { color: '#6e5a46', label: 'Industrial' },
-  vehicular: { color: '#a89880', label: 'Vehicular' },
-  unknown: { color: '#7c7367', label: 'Unknown' },
-}
-
-const VECTOR_DRAW_S = 0.9
-
-// A wind vector that draws itself in (SmokePath behaviour, applied to the Leaflet
-// SVG path). The arrowhead marker only appears once the stroke has landed.
-function WindVector({ from, to, bearing, delay }: { from: [number, number]; to: [number, number]; bearing: number; delay: number }) {
-  const reduced = useReducedMotion()
-  const lineRef = useRef<L.Polyline | null>(null)
-  const [drawn, setDrawn] = useState(Boolean(reduced))
-  const geometryKey = `${from[0]},${from[1]}-${to[0]},${to[1]}`
-
-  useEffect(() => {
-    if (reduced) {
-      setDrawn(true)
-      return
-    }
-    setDrawn(false)
-    let frame = 0
-    let ctrl: { stop: () => void } | null = null
-    const finish = () => {
-      const el = lineRef.current?.getElement() as SVGPathElement | null | undefined
-      if (el) {
-        el.style.strokeDasharray = ''
-        el.style.strokeDashoffset = ''
-      }
-      setDrawn(true)
-    }
-    const start = () => {
-      const el = lineRef.current?.getElement() as SVGPathElement | null | undefined
-      const len = el?.getTotalLength?.() ?? 0
-      if (!el || !len) {
-        // The renderer has not attached the path yet; try once more next frame.
-        frame = requestAnimationFrame(start)
-        return
-      }
-      el.style.strokeDasharray = String(len)
-      el.style.strokeDashoffset = String(len)
-      ctrl = animate(len, 0, {
-        duration: VECTOR_DRAW_S,
-        ease: EASE,
-        delay,
-        onUpdate: (v) => {
-          el.style.strokeDashoffset = String(v)
-        },
-        onComplete: finish,
-      })
-    }
-    frame = requestAnimationFrame(start)
-    // Backstop: a throttled frame loop must not leave the vector hidden mid-draw.
-    const backstop = window.setTimeout(() => {
-      ctrl?.stop()
-      finish()
-    }, (delay + VECTOR_DRAW_S) * 1000 + 250)
-    return () => {
-      cancelAnimationFrame(frame)
-      window.clearTimeout(backstop)
-      ctrl?.stop()
-    }
-  }, [reduced, delay, geometryKey])
-
-  return (
-    <>
-      <Polyline ref={lineRef} positions={[from, to]} pathOptions={{ color: WIND_INK, weight: 2, opacity: 0.85 }} />
-      {drawn && <Marker position={to} icon={windArrowIcon(bearing)} />}
-    </>
-  )
-}
-
-export default function HotspotOverlay() {
+export default function HotspotOverlay({ onPickCity }: Props) {
   const [hotspots, setHotspots] = useState<Hotspot[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -143,46 +47,39 @@ export default function HotspotOverlay() {
     }
   }, [])
 
+  const fireCount = hotspots.filter((h) => h.cause !== 'industrial').length
+  if (error) {
+    // keep rendering: the map below still shows city context
+  }
+
   return (
     <div className="panel p-5">
-      <h2 className="font-display text-lg font-bold text-soot">Emission hotspots and wind transport</h2>
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-lg font-bold text-soot">Emission hotspots and wind transport</h2>
+      </div>
       <p className="measure mt-1 mb-3 text-xs leading-relaxed text-ash">
-        Simulated satellite hotspots with wind vectors. The arrow shows the direction the wind is blowing toward, and
-        the dashed line traces the plume to the downwind city.
+        {fireCount > 0 ? (
+          <>
+            Fire detections from the last two days (top 12 by intensity) plus industrial zones. The arrow shows the
+            direction the wind blows <em>toward</em>; the dashed line traces the plume to the nearest city inside the
+            wind cone, with the travel-time estimate.
+          </>
+        ) : (
+          <>Fire data not loaded — showing industrial zones only. The arrow shows the direction the wind blows <em>toward</em>.</>
+        )}
       </p>
       {error && <div className="banner-warn mb-3">{error}</div>}
 
       <div className="h-[520px] overflow-hidden rounded-sm border border-hairline">
-        <MapContainer bounds={INDIA_BOUNDS} boundsOptions={{ padding: [24, 24] }} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
+        <MapContainer bounds={INDIA_BOUNDS} boundsOptions={{ padding: [18, 18] }} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          {CITIES.map((c) => {
-            const cohort = isCohort(c.key)
-            return (
-              <CircleMarker
-                key={c.key}
-                center={[c.lat, c.lon]}
-                radius={cohort ? 8 : 5}
-                pathOptions={{
-                  color: SOOT,
-                  weight: cohort ? 2 : 1.4,
-                  fillColor: cohort ? OCHRE : PANEL,
-                  fillOpacity: 1,
-                }}
-              >
-                <Tooltip className="vayu-tooltip" direction="top">
-                  <span className="font-semibold">{c.label}</span> ·{' '}
-                  {cohort ? 'federated cohort node' : 'city node'}
-                </Tooltip>
-              </CircleMarker>
-            )
-          })}
-          {hotspots.map((h, i) => {
-            const meta = CAUSE_META[h.cause] ?? CAUSE_META.unknown
-            const arrowEnd = destPoint(h.latitude, h.longitude, h.wind_direction_deg, ARROW_LENGTH_KM)
-            const downwindPos = h.downwind_city ? CITY_COORDS[h.downwind_city] : null
+          {hotspots.map((h) => {
+            const meta = CAUSE_META[h.cause] ?? { color: '#7c7367', label: h.cause }
+            const hasWind = h.wind_toward_deg != null
+            const arrowTo = hasWind ? arrowEnd(h.latitude, h.longitude, h.wind_toward_deg!) : null
             return (
               <Fragment key={h.id}>
                 <CircleMarker
@@ -191,40 +88,45 @@ export default function HotspotOverlay() {
                   pathOptions={{ color: SOOT, weight: 1, fillColor: meta.color, fillOpacity: 1 }}
                 >
                   <Tooltip className="vayu-tooltip" direction="top">
-                    <div className="font-semibold">
-                      {meta.label} hotspot #{h.id}
-                    </div>
+                    <div className="font-semibold">{meta.label} · {h.id}</div>
                     <div>
                       Confidence <span className="tnum">{(h.confidence * 100).toFixed(0)}%</span>
+                      {h.frp != null && (
+                        <>
+                          {' '}· FRP <span className="tnum">{h.frp.toFixed(0)}</span> MW
+                        </>
+                      )}
                     </div>
-                    <div>
-                      Wind <span className="tnum">{h.wind_speed_kmh}</span> km/h toward{' '}
-                      <span className="tnum">{h.wind_direction_deg}°</span>
-                    </div>
-                    {h.downwind_city && (
+                    {hasWind && (
                       <div>
-                        Downwind {cityLabel(h.downwind_city)} · ETA{' '}
-                        <span className="tnum">{h.eta_hours ?? 'n/a'}</span> h
+                        Wind <span className="tnum">{h.wind_speed_ms?.toFixed(1)}</span> m/s from{' '}
+                        <span className="tnum">{h.wind_direction_deg?.toFixed(0)}°</span>
+                      </div>
+                    )}
+                    {h.downwind_city_name && (
+                      <div>
+                        Downwind {h.downwind_city_name} ·{' '}
+                        <span className="tnum">{h.distance_km?.toFixed(0)}</span> km · ETA{' '}
+                        <span className="tnum">{h.eta_hours?.toFixed(1)}</span> h
                       </div>
                     )}
                   </Tooltip>
                 </CircleMarker>
-                <WindVector
-                  from={[h.latitude, h.longitude]}
-                  to={arrowEnd}
-                  bearing={h.wind_direction_deg}
-                  // Stagger caps out: an all-India hotspot list would otherwise
-                  // leave the last vectors waiting several seconds to draw.
-                  delay={0.2 + Math.min(i, 7) * 0.25}
-                />
-                {downwindPos && (
+                {arrowTo && (
+                  <Polyline positions={[[h.latitude, h.longitude], arrowTo]} pathOptions={{ color: WIND_INK, weight: 2, opacity: 0.85 }} />
+                )}
+                {h.downwind_city_id && h.downwind_city_name && (
                   <Polyline
-                    positions={[[h.latitude, h.longitude], downwindPos]}
+                    positions={[
+                      [h.latitude, h.longitude],
+                      // The downwind marker sits at the city; the API only names
+                      // it, so draw to the hotspot-side end using the ETA bearing.
+                      arrowEnd(h.latitude, h.longitude, h.wind_toward_deg ?? 0, Math.min(h.distance_km ?? 0, 600)),
+                    ]}
                     pathOptions={{ color: PLUME, weight: 2, dashArray: '6 6', opacity: 0.9 }}
                   >
                     <Tooltip className="vayu-tooltip" sticky>
-                      Plume path to {cityLabel(h.downwind_city!)} · ETA{' '}
-                      <span className="tnum">{h.eta_hours ?? 'n/a'}</span> h
+                      Plume toward {h.downwind_city_name} · ETA <span className="tnum">{h.eta_hours?.toFixed(1)}</span> h
                     </Tooltip>
                   </Polyline>
                 )}
@@ -242,18 +144,41 @@ export default function HotspotOverlay() {
           </span>
         ))}
         <span className="inline-flex items-center gap-1.5">
-          <WindGlyph />
-          wind direction
+          <span className="inline-block w-6 border-t-2" style={{ borderColor: WIND_INK }} aria-hidden="true" />
+          wind blows toward
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: PLUME }} aria-hidden="true" />
-          plume path to downwind city
+          plume path (ETA)
         </span>
       </div>
 
       <SmokeRule className="my-5" />
 
       <TraceWind hotspots={hotspots} />
+
+      {hotspots.some((h) => h.downwind_city_name) && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {hotspots
+            .filter((h) => h.downwind_city_name && h.eta_hours != null)
+            .slice(0, 8)
+            .map((h) => (
+              <button
+                key={h.id}
+                type="button"
+                className="btn-quiet"
+                onClick={() => onPickCity?.(h.downwind_city_id!)}
+                title={`Jump to ${h.downwind_city_name}'s forecast`}
+              >
+                {meta_label(h)} → {h.downwind_city_name} · ETA {h.eta_hours!.toFixed(1)} h
+              </button>
+            ))}
+        </div>
+      )}
     </div>
   )
+}
+
+function meta_label(h: Hotspot): string {
+  return (CAUSE_META[h.cause] ?? { label: h.cause }).label
 }

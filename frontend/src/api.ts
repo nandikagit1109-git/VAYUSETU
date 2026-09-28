@@ -1,14 +1,20 @@
-// One typed function per backend endpoint. All requests go through /api
-// (proxied to the backend by Vite in dev, and by docker-compose in Docker).
+// One typed function per backend endpoint (section 11.3). All requests go
+// through relative /api/... URLs (Vite proxies them to the backend). Every
+// failure path throws an Error carrying the envelope's message, so callers
+// always render a specific string, never a stack trace.
 import type {
   Alert,
-  ApiErrorBody,
+  ApiError,
+  City,
+  CityHistoryPoint,
   CitizenReport,
-  FederatedStatus,
-  ForecastResponse,
+  FlEval,
+  FlStatus,
+  Forecast,
   Hotspot,
-  SubmitReportRequest,
-  SubmitReportResponse,
+  Meta,
+  ReportCreate,
+  ReportResult,
 } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -21,57 +27,70 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new Error('Cannot reach the backend. Is the API server running?')
   }
-  if (!res.ok) {
-    let message = `HTTP ${res.status}`
-    try {
-      const body = (await res.json()) as ApiErrorBody
-      if (body.message) message = body.message
-    } catch {
-      // non-JSON error body: keep the HTTP status message
-    }
-    throw new Error(message)
+  let body: unknown = null
+  try {
+    body = await res.json()
+  } catch {
+    // Non-JSON body: fall through to the status check below.
   }
-  return (await res.json()) as T
+  if (!res.ok) {
+    const err = body as Partial<ApiError> | null
+    throw new Error(err?.message ?? `HTTP ${res.status}`)
+  }
+  return body as T
 }
 
-export function submitReport(body: SubmitReportRequest): Promise<SubmitReportResponse> {
-  return request<SubmitReportResponse>('/api/reports', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+export function getMeta(): Promise<Meta> {
+  return request<Meta>('/api/meta')
 }
 
-export function getReports(city?: string): Promise<{ reports: CitizenReport[] }> {
-  const qs = city ? `?city=${encodeURIComponent(city)}` : ''
-  return request<{ reports: CitizenReport[] }>(`/api/reports${qs}`)
+export function getCities(): Promise<{ cities: City[] }> {
+  return request<{ cities: City[] }>('/api/cities')
+}
+
+export function getCityHistory(cityId: string, days = 30): Promise<{ city_id: string; points: CityHistoryPoint[] }> {
+  return request(`/api/cities/${encodeURIComponent(cityId)}/history?days=${days}`)
+}
+
+export function submitReport(body: ReportCreate): Promise<ReportResult> {
+  return request<ReportResult>('/api/reports', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function getReports(cityId?: string): Promise<{ reports: CitizenReport[] }> {
+  const qs = cityId ? `?city_id=${encodeURIComponent(cityId)}` : ''
+  return request(`/api/reports${qs}`)
 }
 
 export function getHotspots(): Promise<{ hotspots: Hotspot[] }> {
-  return request<{ hotspots: Hotspot[] }>('/api/hotspots')
+  return request('/api/hotspots')
 }
 
-export function getForecast(city: string): Promise<ForecastResponse> {
-  return request<ForecastResponse>(`/api/forecast?city=${encodeURIComponent(city)}`)
+// Expected "not available" states arrive as HTTP 200 + the error envelope, so
+// the promise resolves; callers check `error` and render a pending state.
+export function getForecast(cityId: string): Promise<Forecast | ApiError> {
+  return request(`/api/forecast?city_id=${encodeURIComponent(cityId)}`)
 }
 
 export function getAlerts(): Promise<{ alerts: Alert[] }> {
-  return request<{ alerts: Alert[] }>('/api/alerts')
-}
-
-export function acknowledgeAlert(id: number): Promise<{ id: number; acknowledged: boolean }> {
-  return request<{ id: number; acknowledged: boolean }>(`/api/alerts/${id}/acknowledge`, {
-    method: 'POST',
-  })
+  return request('/api/alerts')
 }
 
 export function checkAlerts(): Promise<{ created: number }> {
-  return request<{ created: number }>('/api/alerts/check', { method: 'POST' })
+  return request('/api/alerts/check', { method: 'POST' })
 }
 
-export function getFederatedStatus(): Promise<FederatedStatus> {
-  return request<FederatedStatus>('/api/federated/status')
+export function acknowledgeAlert(id: number): Promise<{ id: number; acknowledged: true }> {
+  return request(`/api/alerts/${id}/acknowledge`, { method: 'POST' })
+}
+
+export function getFederatedStatus(): Promise<FlStatus> {
+  return request('/api/federated/status')
 }
 
 export function runFederated(): Promise<{ message: string }> {
-  return request<{ message: string }>('/api/federated/run', { method: 'POST' })
+  return request('/api/federated/run', { method: 'POST' })
+}
+
+export function getFederatedEval(): Promise<FlEval> {
+  return request('/api/federated/eval')
 }

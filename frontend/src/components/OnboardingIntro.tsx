@@ -126,19 +126,19 @@ const BEATS: Beat[] = [
   {
     eyebrow: 'Step 1 of 3',
     title: 'Report what the sky looks like',
-    body: 'A photo or a visibility guess from your street turns into a haze score with a confidence value, pinned to the all-India network map.',
+    body: 'A photo or a visibility guess from your street becomes a heuristic haze estimate with a trust weight, pinned to the all-India network map and blended into that city\u2019s adjusted AQI.',
     art: (reduced) => <PinArt reduced={reduced} />,
   },
   {
     eyebrow: 'Step 2 of 3',
-    title: 'Cities train together, data stays put',
-    body: 'Delhi, Kanpur and Pune are the training cohort: each node fits its own observations and only model weights travel. The raw reports never leave their city.',
+    title: 'Every city trains, no data leaves',
+    body: 'Each tier-1 city node fits the shared model on its own daily records and sends only weight updates to the federated averager. Raw observations never leave their city.',
     art: (reduced) => <NodesArt reduced={reduced} />,
   },
   {
     eyebrow: 'Step 3 of 3',
     title: 'The wind decides who breathes it',
-    body: 'Hotspots are joined to the city downwind of them, with a travel time and the matching GRAP stage when a threshold is crossed.',
+    body: 'Hotspots are joined to the city downwind of them with a travel-time estimate, and threshold crossings raise alerts with the matching GRAP stage or advisory.',
     art: (reduced) => <WindArt reduced={reduced} />,
   },
 ]

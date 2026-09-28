@@ -1,109 +1,43 @@
-"""Federated learning status/trigger endpoints.
-
-The training itself runs in a separate subprocess (app/federated/run_simulation.py)
-which writes round-by-round progress to status.json using atomic
-write-temp-then-rename, so this router never reads a half-written file.
-"""
-import json
+"""Federated endpoints (section 11.3)."""
 import logging
-import subprocess
-import sys
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from ..config import BACKEND_DIR, FEDERATED_CITIES
+from ..federated import runner
+from ..store import DataStore
 
 logger = logging.getLogger("vayusetu.federated")
 router = APIRouter(prefix="/api/federated", tags=["federated"])
 
-STATUS_PATH = Path(__file__).resolve().parents[1] / "federated" / "status.json"
-STALE_AFTER = timedelta(minutes=5)
-
-
-def _default_status() -> dict:
-    return {"status": "idle", "rounds": [], "started_at": None, "completed_at": None}
-
-
-def read_status() -> dict:
-    try:
-        with open(STATUS_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        status = data.get("status")
-        if status not in ("idle", "running", "completed"):
-            return _default_status()
-        rounds = [
-            {
-                "round": int(r["round"]),
-                "client_losses": {
-                    c: float(r.get("client_losses", {}).get(c, 0.0)) for c in FEDERATED_CITIES
-                },
-                "global_loss": float(r.get("global_loss", 0.0)),
-            }
-            for r in data.get("rounds", [])
-        ]
-        return {
-            "status": status,
-            "rounds": rounds,
-            "started_at": data.get("started_at"),
-            "completed_at": data.get("completed_at"),
-        }
-    except FileNotFoundError:
-        return _default_status()
-    except Exception as exc:  # corrupt/partial file: never break the UI
-        logger.warning("could not read federated status: %s", exc)
-        return _default_status()
-
-
-def write_status_atomic(payload: dict) -> None:
-    STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATUS_PATH.with_suffix(".json.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(payload, f)
-    tmp.replace(STATUS_PATH)
-
-
-def _is_stale(status: dict) -> bool:
-    started = status.get("started_at")
-    if not started:
-        return True
-    try:
-        started_dt = datetime.fromisoformat(started)
-        if started_dt.tzinfo is None:
-            started_dt = started_dt.replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) - started_dt > STALE_AFTER
-    except Exception:
-        return True
-
 
 @router.get("/status")
-def get_status():
-    return read_status()
+def federated_status():
+    return runner.read_status()
 
 
 @router.post("/run")
-def run_federated():
-    status = read_status()
-    if status["status"] == "running" and not _is_stale(status):
-        return {"message": "already running"}  # idempotent, never an error
-
-    write_status_atomic({
-        "status": "running",
-        "rounds": [],
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "completed_at": None,
-    })
-
-    try:
-        kwargs: dict = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "cwd": str(BACKEND_DIR)}
-        if sys.platform == "win32":
-            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-        subprocess.Popen([sys.executable, "-m", "app.federated.run_simulation"], **kwargs)
-    except Exception as exc:
-        logger.error("failed to spawn federated simulation: %s", exc)
-        write_status_atomic(_default_status())
-        return JSONResponse(status_code=500, content={"error": True, "message": f"could not start simulation: {exc}"})
-
+def federated_run():
+    store = DataStore.instance()
+    started = runner.start_run_async(store, done_callback=_on_model_ready)
+    if not started:
+        return {"message": "already running"}
     return JSONResponse(status_code=202, content={"message": "started"})
+
+
+def _on_model_ready(version: str) -> None:
+    from ..services.forecast_service import set_model
+
+    _, params = runner.load_global_model()
+    set_model(version, params)
+
+
+@router.get("/eval")
+def federated_eval():
+    from ..federated.evaluate import load_eval
+
+    data = load_eval()
+    if not data:
+        return {"available": False, "rows": [], "mean_mae_persistence": None,
+                "mean_mae_local": None, "mean_mae_federated": None}
+    return data

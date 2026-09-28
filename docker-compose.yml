@@ -3,6 +3,19 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DATA_MODE=${DATA_MODE:-synthetic}
+      - AUTO_TRAIN_ON_START=${AUTO_TRAIN_ON_START:-true}
+      - REBUILD_DATA=${REBUILD_DATA:-false}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 5
     restart: unless-stopped
 
   frontend:
@@ -12,5 +25,6 @@ services:
     environment:
       - VITE_PROXY_TARGET=http://backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped

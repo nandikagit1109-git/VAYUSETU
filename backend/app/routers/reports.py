@@ -1,90 +1,122 @@
-"""Citizen report endpoints."""
+"""Citizen report endpoints (section 10, 11.3).
+
+City assignment is server-side: nearest registry city within
+REPORT_MAX_DISTANCE_KM. Any client-supplied city field is ignored (none
+exists in the schema). Photos are never stored — only their SHA-256 hash.
+"""
 import base64
+import hashlib
 import logging
-import uuid
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 from sqlmodel import col, select
 
-from ..config import UPLOAD_DIR
+from ..config import PHOTO_MAX_BYTES, REPORT_MAX_DISTANCE_KM
 from ..db import get_session
-from ..models import CitizenReport, ReportCreate, utcnow
-from ..services import cv_model
+from ..errors import error_envelope
+from ..geo import haversine_km
+from ..schemas import ReportCreate
+from ..services import cv_scorer
+from ..store import DataStore
+from ..tables import CitizenReportRow
 
 logger = logging.getLogger("vayusetu.reports")
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
+INDIA_LAT = (6.5, 37.5)
+INDIA_LON = (68.0, 97.5)
 
-def _save_photo(photo_base64: str) -> str | None:
-    """Persist the uploaded photo; failure is non-fatal (filename stays None)."""
-    try:
-        payload = photo_base64
-        if "," in payload and payload.strip().lower().startswith("data:"):
-            payload = payload.split(",", 1)[1]
-        raw = base64.b64decode(payload)
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        filename = f"report_{uuid.uuid4().hex}.jpg"
-        with open(UPLOAD_DIR / filename, "wb") as f:
-            f.write(raw)
-        return filename
-    except Exception as exc:
-        logger.warning("could not save uploaded photo: %s", exc)
-        return None
+
+def _trust_weight(haze_score: float, ref_aqi: float | None) -> float:
+    if ref_aqi is None:
+        return 0.6
+    return min(1.0, max(0.2, 1.0 - abs(haze_score - ref_aqi) / 250.0))
 
 
 @router.post("", status_code=201)
 def create_report(body: ReportCreate):
+    # Coordinate validation (India bbox).
+    if not (INDIA_LAT[0] <= body.latitude <= INDIA_LAT[1]):
+        return error_envelope("latitude outside India (6.5-37.5)", status_code=422)
+    if not (INDIA_LON[0] <= body.longitude <= INDIA_LON[1]):
+        return error_envelope("longitude outside India (68.0-97.5)", status_code=422)
     if body.photo_base64 is None and body.manual_visibility is None:
-        return JSONResponse(
-            status_code=400,
-            content={"error": True, "message": "at least one of photo_base64 or manual_visibility is required"},
-        )
-    if body.manual_visibility is not None and body.manual_visibility not in ("clear", "hazy", "very_hazy"):
-        return JSONResponse(
-            status_code=400,
-            content={"error": True, "message": "manual_visibility must be 'clear', 'hazy' or 'very_hazy'"},
-        )
+        return error_envelope("at least one of photo_base64 or manual_visibility is required", status_code=422)
 
-    haze_score, confidence = cv_model.score_report(body.photo_base64, body.manual_visibility)
-    photo_filename = _save_photo(body.photo_base64) if body.photo_base64 else None
+    store = DataStore.instance()
 
+    # Decode + score the photo BEFORE touching the DB.
+    photo_raw: bytes | None = None
+    if body.photo_base64 is not None:
+        try:
+            photo_raw = cv_scorer.decode_photo(body.photo_base64, PHOTO_MAX_BYTES)
+        except cv_scorer.PhotoTooLarge:
+            return error_envelope("photo too large", status_code=413)
+        except cv_scorer.PhotoError:
+            return error_envelope("could not read image", status_code=422)
+
+    try:
+        haze_score, confidence, scorer = cv_scorer.score_report(photo_raw, body.manual_visibility)
+    except cv_scorer.PhotoError:
+        return error_envelope("could not read image", status_code=422)
+
+    # Server-side city assignment.
+    nearest, dist = None, float("inf")
+    for c in store.cities:
+        d = haversine_km(body.latitude, body.longitude, c.latitude, c.longitude)
+        if d < dist:
+            nearest, dist = c, d
+    if nearest is None or dist > REPORT_MAX_DISTANCE_KM:
+        return error_envelope("outside coverage", status_code=422)
+
+    ref_aqi, _ = store.latest_aqi(nearest.city_id)
+    trust = _trust_weight(haze_score, ref_aqi)
+
+    photo_sha = hashlib.sha256(photo_raw).hexdigest() if photo_raw is not None else None
     with get_session() as session:
-        report = CitizenReport(
-            latitude=body.latitude,
-            longitude=body.longitude,
-            city=body.city.strip().lower(),
-            photo_filename=photo_filename,
-            haze_score=haze_score,
-            confidence=confidence,
-            trust_weight=1.0,
-            created_at=utcnow(),
+        report = CitizenReportRow(
+            latitude=round(body.latitude, 4),
+            longitude=round(body.longitude, 4),
+            city_id=nearest.city_id,
+            haze_score=round(float(haze_score), 1),
+            confidence=round(float(confidence), 4),
+            trust_weight=round(float(trust), 4),
+            source="user",
+            photo_sha256=photo_sha,
         )
         session.add(report)
         session.commit()
         session.refresh(report)
-        return {"id": report.id, "haze_score": report.haze_score, "confidence": report.confidence}
+        return {
+            "id": report.id,
+            "city_id": report.city_id,
+            "haze_score": report.haze_score,
+            "confidence": report.confidence,
+            "trust_weight": report.trust_weight,
+            "scorer": scorer,
+        }
 
 
 @router.get("")
-def list_reports(city: str | None = None):
+def list_reports(city_id: str | None = None):
     with get_session() as session:
-        stmt = select(CitizenReport)
-        if city:
-            stmt = stmt.where(col(CitizenReport.city) == city.strip().lower())
-        reports = session.exec(stmt.order_by(col(CitizenReport.created_at).desc())).all()
+        stmt = select(CitizenReportRow)
+        if city_id:
+            stmt = stmt.where(col(CitizenReportRow.city_id) == city_id)
+        rows = session.exec(stmt.order_by(col(CitizenReportRow.created_at).desc())).all()
         return {
             "reports": [
                 {
                     "id": r.id,
                     "latitude": r.latitude,
                     "longitude": r.longitude,
-                    "city": r.city,
+                    "city_id": r.city_id,
                     "haze_score": r.haze_score,
                     "confidence": r.confidence,
                     "trust_weight": r.trust_weight,
+                    "source": r.source,
                     "created_at": r.created_at.isoformat() if r.created_at else None,
                 }
-                for r in reports
+                for r in rows[:500]
             ]
         }

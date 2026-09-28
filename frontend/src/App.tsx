@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { getReports } from './api'
-import type { CitizenReport } from './types'
+import type { CitizenReport, ReportResult } from './types'
 import { DRIFT, DUR, EASE } from './motion'
+import { useCities, useMeta } from './hooks'
 import AlertsPanel from './components/AlertsPanel'
+import CityInfoCard from './components/CityInfoCard'
+import CitySearch from './components/CitySearch'
 import FederatedPanel from './components/FederatedPanel'
 import ForecastChart from './components/ForecastChart'
 import HotspotOverlay from './components/HotspotOverlay'
@@ -12,6 +15,7 @@ import OnboardingIntro, { hasSeenIntro } from './components/OnboardingIntro'
 import ReportForm from './components/ReportForm'
 import SevereBanner from './components/SevereBanner'
 import SpotlightTour from './components/SpotlightTour'
+import SyntheticLabel from './components/SyntheticLabel'
 
 type Tab = 'map' | 'federated' | 'hotspots' | 'alerts'
 
@@ -25,8 +29,8 @@ const TABS: { id: Tab; label: string }[] = [
 const TAB_BLURB: Record<Tab, string> = {
   map: 'Citizen observations across the network',
   federated: 'Local training, aggregated weights',
-  hotspots: 'Sources and downwind transport',
-  alerts: 'Threshold crossings and GRAP actions',
+  hotspots: 'Sources, transport and forecasts',
+  alerts: 'Threshold crossings and recommended actions',
 }
 
 // Custom brand mark: a sun disc cut by two horizontal haze bands, drawn for this
@@ -41,7 +45,6 @@ function BrandMark() {
   )
 }
 
-// Small hand-drawn glyph tied to each tab; it crossfades in sync with the tab content.
 function TabGlyph({ tab }: { tab: Tab }) {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
   return (
@@ -80,8 +83,12 @@ function TabGlyph({ tab }: { tab: Tab }) {
 }
 
 function MapReportTab() {
+  const { cities, error: cityError } = useCities()
   const [reports, setReports] = useState<CitizenReport[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reportError, setReportError] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string>('delhi')
+  const [pin, setPin] = useState<{ lat: number; lon: number }>({ lat: 28.6139, lon: 77.209 })
+  const [lastResult, setLastResult] = useState<ReportResult | null>(null)
 
   useEffect(() => {
     let active = true
@@ -90,29 +97,70 @@ function MapReportTab() {
         if (active) setReports(d.reports ?? [])
       })
       .catch((err) => {
-        if (active) setLoadError(err instanceof Error ? err.message : 'Could not load existing reports.')
+        if (active) setReportError(err instanceof Error ? err.message : 'Could not load existing reports.')
       })
     return () => {
       active = false
     }
   }, [])
 
+  const selectedCity = cities.find((c) => c.city_id === selectedId) ?? null
+
+  function handleCreated(report: CitizenReport, result: ReportResult) {
+    setReports((prev) => [report, ...prev])
+    setLastResult(result)
+    setSelectedId(result.city_id)
+  }
+
   return (
-    // The map dominates its tab; the report form is a narrow side rail, not a card in a grid.
     <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
       <div className="flex flex-col gap-3">
-        <ReportForm onCreated={(pin) => setReports((prev) => [pin, ...prev])} />
-        {loadError && <div className="banner-warn">{loadError} New submissions still work.</div>}
+        <ReportForm pinnedLatLon={pin} onCreated={handleCreated} />
+        <div className="panel p-5">
+          <CitySearch cities={cities} value={selectedId} onChange={setSelectedId} id="map-city-search" />
+          <button
+            type="button"
+            className="btn-quiet mt-3 w-full"
+            onClick={() => {
+              if (selectedCity) setPin({ lat: selectedCity.latitude, lon: selectedCity.longitude })
+            }}
+          >
+            Use {selectedCity?.name ?? 'city'} centre as report location
+          </button>
+        </div>
+        <CityInfoCard city={selectedCity} />
+        {(reportError || cityError) && <div className="banner-warn">{reportError ?? cityError}</div>}
+        {lastResult && lastResult.scorer === 'heuristic_v1' && (
+          <div className="note">Photo score is a heuristic estimate, not a measurement.</div>
+        )}
       </div>
       <div className="panel h-[70vh] min-h-[480px] overflow-hidden" data-tour="map">
-        <MapView reports={reports} />
+        <MapView
+          cities={cities}
+          reports={reports}
+          selectedCityId={selectedId}
+          onSelectCity={setSelectedId}
+          onMapPick={(lat, lon) => setPin({ lat, lon })}
+        />
       </div>
+    </div>
+  )
+}
+
+function HotspotsTab() {
+  const { cities } = useCities()
+  const [cityId, setCityId] = useState<string>('delhi')
+  return (
+    <div className="flex flex-col gap-4">
+      <ForecastChart cities={cities} selectedCityId={cityId} onSelectCity={setCityId} />
+      <HotspotOverlay onPickCity={setCityId} />
     </div>
   )
 }
 
 export default function App() {
   const reduced = useReducedMotion()
+  const meta = useMeta()
   const [tab, setTab] = useState<Tab>('map')
   const [introOpen, setIntroOpen] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
@@ -150,10 +198,7 @@ export default function App() {
                 >
                   {t.label}
                   {/* Active-tab rule sits flush on the header's bottom hairline. */}
-                  <span
-                    className={`absolute inset-x-3 -bottom-3 h-[2px] ${active ? 'bg-ochre' : 'bg-transparent'}`}
-                    aria-hidden="true"
-                  />
+                  <span className={`absolute inset-x-3 -bottom-3 h-[2px] ${active ? 'bg-ochre' : 'bg-transparent'}`} aria-hidden="true" />
                 </button>
               )
             })}
@@ -166,7 +211,6 @@ export default function App() {
       </header>
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 py-5">
-        {/* Outgoing tab fully fades out before the incoming one mounts (mode="wait"). */}
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
@@ -175,29 +219,29 @@ export default function App() {
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: DRIFT }}
             transition={reduced ? { duration: 0 } : { duration: DUR, ease: EASE }}
           >
-            <div className="mb-4 flex items-center gap-2 text-ash">
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-ash">
               <TabGlyph tab={tab} />
               <span className="text-[11px] uppercase tracking-[0.08em]">{TAB_BLURB[tab]}</span>
+              <span className="ml-auto">
+                <SyntheticLabel />
+              </span>
             </div>
 
             {tab === 'map' && <MapReportTab />}
             {tab === 'federated' && <FederatedPanel />}
-            {tab === 'hotspots' && (
-              <div className="flex flex-col gap-4">
-                <HotspotOverlay />
-                <ForecastChart />
-              </div>
-            )}
+            {tab === 'hotspots' && <HotspotsTab />}
             {tab === 'alerts' && <AlertsPanel />}
           </motion.div>
         </AnimatePresence>
       </main>
 
+      {/* meta is fetched once at the shell level so the honesty label is always
+          present; hooks below consume it via their own fetches. */}
+      <span className="hidden" data-demo-now={meta?.demo_now ?? ''} />
+
       <SevereBanner suppressed={tab === 'alerts' || introOpen || tourOpen} onView={() => setTab('alerts')} />
 
-      <AnimatePresence>
-        {introOpen && <OnboardingIntro key="intro" onDone={() => setIntroOpen(false)} />}
-      </AnimatePresence>
+      <AnimatePresence>{introOpen && <OnboardingIntro key="intro" onDone={() => setIntroOpen(false)} />}</AnimatePresence>
 
       {tourOpen && <SpotlightTour onNavigate={(t) => setTab(t as Tab)} onClose={() => setTourOpen(false)} />}
     </div>

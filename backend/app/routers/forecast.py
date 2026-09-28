@@ -1,43 +1,31 @@
-"""Forecast endpoints."""
+"""Forecast endpoint (section 11.3).
+
+Expected "not available" states return HTTP 200 with the error envelope so the
+UI can render a pending/empty state; unknown cities are 404 envelopes.
+"""
 import logging
 
-from fastapi import APIRouter
-from sqlmodel import col, delete, select
+from fastapi import APIRouter, Query
 
-from ..db import get_session
-from ..models import ForecastPoint
-from ..services import forecast_model
+from ..errors import error_envelope, sanitize
+from ..services.forecast_service import ForecastUnavailable, get_forecast
+from ..store import DataStore
 
 logger = logging.getLogger("vayusetu.forecast")
 router = APIRouter(prefix="/api/forecast", tags=["forecast"])
 
 
 @router.get("")
-def get_forecast(city: str):
-    # Polled endpoint: on any internal problem return HTTP 200 with error:true
-    # so the UI shows a "pending" state instead of breaking.
+def get_city_forecast(city_id: str = Query(...)):
+    store = DataStore.instance()
+    if store.city(city_id) is None:
+        return error_envelope(f"unknown city {city_id}", status_code=404)
     try:
-        fc = forecast_model.get_forecast(city)
-    except forecast_model.ForecastUnavailable as exc:
+        fc = get_forecast(store, city_id)
+    except ForecastUnavailable as exc:
+        # Polled endpoint: expected unavailability is a 200 envelope.
         return {"error": True, "message": str(exc)}
     except Exception as exc:
-        logger.warning("forecast failed for %s: %s", city, exc)
-        return {"error": True, "message": f"forecast pending for {city}"}
-
-    try:
-        with get_session() as session:
-            session.exec(delete(ForecastPoint).where(col(ForecastPoint.city) == fc["city"]))
-            for p in fc["raw_points"]:
-                session.add(ForecastPoint(
-                    city=fc["city"],
-                    forecast_for=p["forecast_for"],
-                    predicted_aqi=p["predicted_aqi"],
-                    lower_bound=p["lower_bound"],
-                    upper_bound=p["upper_bound"],
-                    generated_at=fc["generated_at"],
-                ))
-            session.commit()
-    except Exception as exc:
-        logger.warning("could not persist forecast points for %s: %s", fc["city"], exc)
-
-    return {"city": fc["city"], "points": fc["points"]}
+        logger.warning("forecast failed for %s: %s", city_id, exc)
+        return {"error": True, "message": f"forecast pending for {city_id}"}
+    return sanitize(fc)

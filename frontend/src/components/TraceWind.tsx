@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { animate, motion, useReducedMotion } from 'framer-motion'
 import type { Hotspot } from '../types'
-import { cityLabel } from '../cities'
 import { EASE, FadeUp } from '../motion'
 
 const SOOT = '#211e1a'
@@ -22,11 +21,11 @@ interface TraceWindProps {
   hotspots: Hotspot[]
 }
 
-// "Trace the Wind": drag the handle along a hotspot -> downwind city vector to read
-// how far the plume has travelled and what it is worth in AQI terms at that point.
+// "Trace the Wind": drag the handle along a hotspot -> downwind city path to
+// read how far the plume has travelled and how much strength it keeps.
 export default function TraceWind({ hotspots }: TraceWindProps) {
   const reduced = useReducedMotion()
-  const candidates = useMemo(() => hotspots.filter((h) => h.downwind_city !== null), [hotspots])
+  const candidates = useMemo(() => hotspots.filter((h) => h.downwind_city_id != null && h.eta_hours != null), [hotspots])
   const [sel, setSel] = useState(0)
   const [t, setT] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -120,17 +119,17 @@ export default function TraceWind({ hotspots }: TraceWindProps) {
   if (candidates.length === 0) {
     return (
       <div className="rounded-sm border border-hairline bg-panel/60 p-4 text-xs text-ash">
-        No hotspot in the current set has a downwind city, so there is no plume path to trace yet.
+        No hotspot in the current set has a city downwind of it, so there is no plume path to trace yet.
       </div>
     )
   }
 
-  const city = cityLabel(h.downwind_city!)
+  const city = h.downwind_city_name ?? h.downwind_city_id!
   const eta = h.eta_hours ?? 0
   const elapsed = eta * t
   const remaining = eta * (1 - t)
-  // Demo-scale estimate: a confidence-weighted peak contribution that loses up to
-  // 45% of its strength to dilution between the hotspot and the city.
+  // Demo-scale estimate: a confidence-weighted peak contribution that loses up
+  // to 45% of its strength to dilution between the hotspot and the city.
   const aqiImpact = Math.round(h.confidence * 180 * (1 - 0.45 * t))
   const handleX = X0 + t * SPAN
   const atCity = t > 0.985
@@ -154,7 +153,7 @@ export default function TraceWind({ hotspots }: TraceWindProps) {
           >
             {candidates.map((c, i) => (
               <option key={c.id} value={i}>
-                #{c.id} · {c.cause.replace('_', ' ')} · {cityLabel(c.downwind_city!)}
+                {c.cause.replace('_', ' ')} → {c.downwind_city_name} · ETA {c.eta_hours?.toFixed(1)} h
               </option>
             ))}
           </select>
@@ -191,16 +190,7 @@ export default function TraceWind({ hotspots }: TraceWindProps) {
         <line x1={X0} y1={46} x2={X1} y2={46} stroke="rgba(33,30,26,0.18)" strokeWidth={1} strokeDasharray="4 5" />
 
         {/* travelled plume, live while dragging */}
-        <line
-          x1={X0}
-          y1={46}
-          x2={handleX}
-          y2={46}
-          stroke={OCHRE}
-          strokeWidth={3}
-          strokeLinecap="round"
-          opacity={0.9}
-        />
+        <line x1={X0} y1={46} x2={handleX} y2={46} stroke={OCHRE} strokeWidth={3} strokeLinecap="round" opacity={0.9} />
 
         {/* midpoint tick */}
         <line x1={X0 + SPAN / 2} y1={38} x2={X0 + SPAN / 2} y2={54} stroke="rgba(33,30,26,0.25)" strokeWidth={1} />
@@ -209,7 +199,7 @@ export default function TraceWind({ hotspots }: TraceWindProps) {
         <circle cx={X0} cy={46} r={6} fill={EMBER} stroke={SOOT} strokeWidth={1} />
         <circle cx={X1} cy={46} r={6} fill={PANEL} stroke={SOOT} strokeWidth={2} />
         <text x={X0} y={26} textAnchor="middle" fontSize="10" fill={ASH} fontFamily="IBM Plex Mono, monospace">
-          hotspot #{h.id}
+          hotspot
         </text>
         <text x={X1} y={26} textAnchor="middle" fontSize="10" fill={ASH} fontFamily="IBM Plex Mono, monospace">
           {city}
@@ -249,8 +239,7 @@ export default function TraceWind({ hotspots }: TraceWindProps) {
           </span>
           <span>
             <span className="label mr-1.5">Elapsed</span>
-            <span className="tnum">{elapsed.toFixed(1)}</span> h ·{' '}
-            <span className="tnum">{remaining.toFixed(1)}</span> h to arrival
+            <span className="tnum">{elapsed.toFixed(1)}</span> h · <span className="tnum">{remaining.toFixed(1)}</span> h to arrival
           </span>
           <span>
             <span className="label mr-1.5">Est. AQI added</span>

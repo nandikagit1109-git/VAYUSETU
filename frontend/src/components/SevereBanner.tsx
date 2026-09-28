@@ -3,21 +3,18 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { checkAlerts, getAlerts } from '../api'
 import type { Alert } from '../types'
 import { EASE } from '../motion'
-import { cityLabel } from '../cities'
 
 const POLL_MS = 30000
 
-const SEVERITY_RANK: Record<string, number> = { Severe: 0, 'Very Poor': 1, Poor: 2, Moderate: 3 }
+const SEVERITY_RANK: Record<string, number> = { Severe: 0, 'Very Poor': 1, Poor: 2 }
 
 const SEVERITY_INK: Record<string, string> = {
-  Moderate: 'var(--sev-moderate)',
   Poor: 'var(--sev-poor)',
   'Very Poor': 'var(--sev-very-poor)',
   Severe: 'var(--sev-severe)',
 }
 
-// GRAP Stage III and IV are the ones that close schools or stop trucks; those are
-// the only alerts worth interrupting another tab for.
+// Very Poor and Severe are the ones worth interrupting another tab for.
 const BANNER_SEVERITIES = new Set(['Very Poor', 'Severe'])
 
 interface SevereBannerProps {
@@ -25,8 +22,8 @@ interface SevereBannerProps {
   onView: () => void
 }
 
-// Sticky banner for the most urgent unacknowledged GRAP Stage-II+ alert. It stays
-// down while the Alerts tab, the intro or the tour owns the screen, and slides up
+// Sticky banner for the most urgent unacknowledged alert. It stays down while
+// the Alerts tab, the intro or the tour owns the screen, and slides up
 // otherwise; View jumps to Alerts, Dismiss hides that alert id for the session.
 export default function SevereBanner({ suppressed, onView }: SevereBannerProps) {
   const reduced = useReducedMotion()
@@ -85,13 +82,13 @@ export default function SevereBanner({ suppressed, onView }: SevereBannerProps) 
           />
           <p className="min-w-0 flex-1 text-xs leading-relaxed text-soot">
             <span className="font-semibold">
-              {worst.severity} alert for {cityLabel(worst.city)}
+              {worst.severity} alert for {worst.city_name || worst.city_id}
             </span>
             <span className="text-ash">
               {' '}
               · predicted AQI <span className="tnum">{worst.predicted_aqi.toFixed(0)}</span>.{' '}
             </span>
-            <span className="line-clamp-2 text-ash">{worst.grap_action}</span>
+            <span className="line-clamp-2 text-ash">{worst.action}</span>
           </p>
           <span className="ml-auto flex items-center gap-2">
             <button type="button" className="btn-primary py-1.5" onClick={onView}>

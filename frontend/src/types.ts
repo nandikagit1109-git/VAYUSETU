@@ -1,89 +1,69 @@
-// TypeScript interfaces mirroring the backend API contracts (Section 5) EXACTLY.
-// Field names and casing must never drift from the backend models.
+// TypeScript interfaces mirroring the backend Pydantic models (section 11.2)
+// VERBATIM. Field names and casing must never drift from the backend.
 
+export type Tier = 1 | 2 | 3;
+export type ApiError = { error: true; message: string; details?: unknown };
+
+export interface Meta {
+  data_mode: "synthetic" | "real";
+  fallback_reason: string | null;
+  demo_now: string;            // YYYY-MM-DD
+  n_cities: number; n_tier1: number; n_tier2: number; n_tier3: number;
+  model_version: string | null;
+  model_method: "federated_gru" | "persistence";
+  fl_status: "idle" | "running" | "completed" | "failed";
+}
+export interface City {
+  city_id: string; name: string; state: string;
+  latitude: number; longitude: number; tier: Tier;
+  latest_aqi: number | null; latest_date: string | null;
+  citizen_adjusted_aqi: number | null; report_count_24h: number;
+}
+export interface CityHistoryPoint { date: string; aqi: number | null; pm25: number | null; }
 export interface CitizenReport {
-  id: number
-  latitude: number
-  longitude: number
-  city: string
-  haze_score: number
-  confidence: number
-  trust_weight: number
-  created_at: string | null
+  id: number; latitude: number; longitude: number; city_id: string;
+  haze_score: number; confidence: number; trust_weight: number;
+  source: "user" | "seed"; created_at: string;   // ISO-8601 UTC
 }
-
-export interface SubmitReportRequest {
-  latitude: number
-  longitude: number
-  city: string
-  photo_base64: string | null
-  manual_visibility: 'clear' | 'hazy' | 'very_hazy' | null
+export interface ReportCreate {
+  latitude: number; longitude: number;
+  photo_base64?: string | null;
+  manual_visibility?: "clear" | "hazy" | "very_hazy" | null;
 }
-
-export interface SubmitReportResponse {
-  id: number
-  haze_score: number
-  confidence: number
-}
-
+export interface ReportResult { id: number; city_id: string; haze_score: number; confidence: number; trust_weight: number; scorer: "heuristic_v1" | "manual"; }
 export interface Hotspot {
-  id: number
-  latitude: number
-  longitude: number
-  cause: 'stubble_burning' | 'industrial' | 'vehicular' | 'unknown' | string
-  confidence: number
-  detected_at: string | null
-  wind_direction_deg: number
-  wind_speed_kmh: number
-  downwind_city: string | null
-  eta_hours: number | null
+  id: string; latitude: number; longitude: number;
+  cause: "stubble_burning" | "open_burning" | "industrial";
+  confidence: number; detected_on: string; frp: number | null;
+  wind_direction_deg: number | null; wind_speed_ms: number | null; wind_toward_deg: number | null;
+  downwind_city_id: string | null; downwind_city_name: string | null;
+  distance_km: number | null; eta_hours: number | null;
 }
-
-export interface ForecastPointOut {
-  forecast_for: string
-  predicted_aqi: number
-  lower_bound: number
-  upper_bound: number
+export interface ForecastPoint {
+  date: string; horizon_days: 0 | 1 | 2 | 3;
+  predicted_aqi: number; lower_bound: number; upper_bound: number; observed: boolean;
 }
-
-export interface ForecastResponse {
-  city?: string
-  points?: ForecastPointOut[]
-  error?: boolean
-  message?: string
+export interface Forecast {
+  city_id: string; tier: Tier;
+  method: "federated_gru" | "persistence" | "neighbor_idw";
+  model_version: string | null; points: ForecastPoint[];
 }
-
-export type AlertSeverity = 'Moderate' | 'Poor' | 'Very Poor' | 'Severe'
-
 export interface Alert {
-  id: number
-  city: string
-  severity: AlertSeverity | string
-  predicted_aqi: number
-  grap_action: string
-  channel: 'dashboard' | 'sms_simulated' | 'whatsapp_simulated' | string
-  created_at: string | null
-  acknowledged: boolean
+  id: number; city_id: string; city_name: string;
+  severity: "Poor" | "Very Poor" | "Severe";
+  predicted_aqi: number; forecast_date: string;
+  action_framework: "GRAP" | "ADVISORY"; grap_stage: string | null; action: string;
+  channels: ("dashboard" | "sms_simulated")[]; created_at: string; acknowledged: boolean;
 }
-
-export interface FederatedRound {
-  round: number
-  client_losses: {
-    delhi: number
-    kanpur: number
-    pune: number
-  }
-  global_loss: number
+export interface FlRound { round: number; client_losses: Record<string, number>; global_loss: number; global_val_mae: number; }
+export interface FlStatus {
+  status: "idle" | "running" | "completed" | "failed";
+  rounds: FlRound[]; total_rounds: number;
+  clients: string[]; excluded: { city_id: string; reason: string }[];
+  started_at: string | null; completed_at: string | null; error: string | null;
 }
-
-export interface FederatedStatus {
-  status: 'idle' | 'running' | 'completed'
-  rounds: FederatedRound[]
-  started_at: string | null
-  completed_at: string | null
-}
-
-export interface ApiErrorBody {
-  error?: boolean
-  message?: string
+export interface FlEvalRow { city_id: string; name: string; n_val: number; mae_persistence: number; mae_local: number; mae_federated: number; }
+export interface FlEval {
+  available: boolean; rows: FlEvalRow[];
+  mean_mae_persistence: number | null; mean_mae_local: number | null; mean_mae_federated: number | null;
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { acknowledgeAlert, checkAlerts, getAlerts } from '../api'
 import type { Alert } from '../types'
-import { CITIES, cityLabel } from '../cities'
 import InfoAccordion from './InfoAccordion'
 
 const POLL_MS = 30000
@@ -9,19 +8,17 @@ const POLL_MS = 30000
 // Solid severity chips keyed to the warm AQI ramp; foreground flips to the light
 // panel colour once the fill gets dark enough to need it.
 const SEVERITY_CHIP: Record<string, { bg: string; fg: string }> = {
-  Moderate: { bg: '#c6b184', fg: '#211e1a' },
   Poor: { bg: '#c08a3e', fg: '#211e1a' },
   'Very Poor': { bg: '#b0552a', fg: '#f2eee6' },
   Severe: { bg: '#7e2d14', fg: '#f2eee6' },
 }
 
 // Rank used to order the list by real urgency (worst first), not just recency.
-const SEVERITY_RANK: Record<string, number> = { Severe: 4, 'Very Poor': 3, Poor: 2, Moderate: 1 }
+const SEVERITY_RANK: Record<string, number> = { Severe: 4, 'Very Poor': 3, Poor: 2 }
 
 const CHANNEL_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   sms_simulated: 'SMS (simulated)',
-  whatsapp_simulated: 'WhatsApp (simulated)',
 }
 
 export default function AlertsPanel() {
@@ -31,7 +28,7 @@ export default function AlertsPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      // Fire the threshold check first (per spec: on load + every 30s), then fetch.
+      // Fire the threshold check first (on load + every 30s, section 13), then fetch.
       await checkAlerts().catch((err) => console.warn('alert check failed:', err))
       const data = await getAlerts()
       setAlerts(data.alerts ?? [])
@@ -51,7 +48,7 @@ export default function AlertsPanel() {
     setAckedBusy(id)
     try {
       const res = await acknowledgeAlert(id)
-      // Update local state directly; no full refetch (per spec).
+      // Update local state directly; no full refetch.
       setAlerts((prev) => prev.map((a) => (a.id === res.id ? { ...a, acknowledged: res.acknowledged } : a)))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Acknowledge failed.')
@@ -60,8 +57,7 @@ export default function AlertsPanel() {
     }
   }
 
-  // Unacknowledged first, then worst severity, then newest. ISO timestamps sort
-  // lexicographically, so string compare is chronological.
+  // Unacknowledged first, then worst severity, then newest.
   const ordered = [...alerts].sort((a, b) => {
     if (a.acknowledged !== b.acknowledged) return a.acknowledged ? 1 : -1
     const rank = (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0)
@@ -72,35 +68,28 @@ export default function AlertsPanel() {
   return (
     <div className="panel p-5" data-tour="alerts-list">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-lg font-bold text-soot">Alerts and GRAP recommendations</h2>
-        <span className="text-xs text-ash">threshold check runs every 30s</span>
+        <h2 className="font-display text-lg font-bold text-soot">Alerts and recommended actions</h2>
+        <span className="text-xs text-ash">threshold check runs on load and every 30s</span>
       </div>
       <p className="measure mb-4 text-xs leading-relaxed text-ash">
-        When a forecast crosses a GRAP threshold within 24 hours, an alert appears here with the matching graded
-        response action.
+        For each city, the worst predicted AQI across +1/+2/+3 days sets the severity. Delhi-NCR cities get the
+        graded GRAP response; every other city gets a state-level advisory.
       </p>
 
       <div className="measure mb-4">
-        <InfoAccordion title="What does this alert mean?">
-          <p className="mb-2">
-            Alerts are forecast-driven, not reading-driven. Every 30 seconds the checker reads the 72-hour forecast for
-            all {CITIES.length} cities in the network, takes each city&apos;s highest predicted AQI in the next 24 hours,
-            and raises an alert if that value is above 200. The band it falls in sets the GRAP stage, and the action text
-            is the real measure list for that stage, summarised.
-          </p>
-          <dl className="mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            <dt className="tnum text-soot">201 to 300</dt>
-            <dd>Poor, Stage-I: waste-burning enforcement, road sweeping, border checks</dd>
-            <dt className="tnum text-soot">301 to 400</dt>
-            <dd>Very Poor, Stage-II: adds diesel-generator ban, construction halt, work-from-home advisory</dd>
-            <dt className="tnum text-soot">above 400</dt>
-            <dd>Severe, Stage-III/IV: adds truck no-entry, school closure advisory, fossil-fuel industry stoppage</dd>
+        <InfoAccordion title="How severity and actions are chosen">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt className="tnum text-soot">201–300</dt>
+            <dd>Poor · GRAP Stage I in Delhi-NCR; dust control, no open burning</dd>
+            <dt className="tnum text-soot">301–400</dt>
+            <dd>Very Poor · Stage II; adds DG-restrictions and transport boosts; simulated SMS</dd>
+            <dt className="tnum text-soot">401+</dt>
+            <dd>Severe · Stage III/IV in NCR; construction halts, truck entry stops; simulated SMS</dd>
           </dl>
-          <p>
-            One alert per city and stage stays open at a time; acknowledging it is what allows a later alert for the
-            same city to be raised. GRAP itself is Delhi-NCR&apos;s protocol, so for the other cities the same AQI bands
-            are applied to keep the stages comparable. The channel chip shows where the notification was routed: this
-            dashboard, plus simulated SMS and WhatsApp.
+          <p className="mt-2">
+            One un-acknowledged alert per city and severity stays open at a time, so the check is idempotent.
+            The action text is a summarised paraphrase for demonstration — verify against the latest CAQM
+            notification before any real-world use.
           </p>
         </InfoAccordion>
       </div>
@@ -111,8 +100,7 @@ export default function AlertsPanel() {
         <div className="rounded-sm border border-hairline bg-haze px-4 py-8 text-center">
           <p className="text-sm text-soot">No alerts right now.</p>
           <p className="measure mx-auto mt-1 text-xs text-ash">
-            The threshold checker runs on load and every 30 seconds. Alerts appear here when a city forecast crosses a
-            GRAP stage within the next 24 hours.
+            The checker runs on load and every 30 seconds; alerts appear when a city&apos;s forecast crosses 200.
           </p>
         </div>
       ) : (
@@ -128,19 +116,34 @@ export default function AlertsPanel() {
                   >
                     {a.severity}
                   </span>
-                  <span className="font-display text-sm font-bold text-soot">{cityLabel(a.city)}</span>
+                  <span className="font-display text-sm font-bold text-soot">{a.city_name || a.city_id}</span>
                   <span className="text-xs text-ash">
                     predicted AQI <span className="tnum font-medium text-soot">{a.predicted_aqi.toFixed(0)}</span>
                   </span>
-                  <span className="rounded-sm border border-hairline bg-haze px-2 py-0.5 text-[10px] uppercase tracking-wide text-ash">
-                    {CHANNEL_LABELS[a.channel] ?? a.channel}
+                  <span className="text-xs text-ash">
+                    for <span className="tnum">{a.forecast_date}</span>
                   </span>
+                  <span className="rounded-sm border border-hairline bg-haze px-2 py-0.5 text-[10px] uppercase tracking-wide text-ash">
+                    {a.action_framework}
+                    {a.grap_stage ? ` · ${a.grap_stage}` : ''}
+                  </span>
+                  {a.channels.map((ch) => (
+                    <span
+                      key={ch}
+                      className={`rounded-sm border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                        ch === 'sms_simulated' ? 'border-ochre/60 text-ochre' : 'border-hairline text-ash'
+                      }`}
+                      title={ch === 'sms_simulated' ? 'Simulated channel: no real SMS is sent in this demo' : undefined}
+                    >
+                      {CHANNEL_LABELS[ch] ?? ch}
+                    </span>
+                  ))}
                   <span className="tnum ml-auto text-xs text-ash">
                     {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
                   </span>
                 </div>
 
-                <p className="measure mb-3 text-sm leading-relaxed text-soot">{a.grap_action}</p>
+                <p className="measure mb-3 text-sm leading-relaxed text-soot">{a.action}</p>
 
                 {a.acknowledged ? (
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ash">

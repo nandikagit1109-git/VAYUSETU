@@ -20,31 +20,31 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: 'tabs',
     title: 'Four sections, one network',
-    body: 'Map and report, federated training, hotspots with forecast, and alerts. Everything runs against local mock data by default, so it works offline.',
+    body: 'Map and report, federated training, hotspots with forecast, and alerts. Everything runs on generated demonstration data by default, so it works fully offline.',
   },
   {
     target: 'report-form',
     tab: 'map',
     title: 'File an observation',
-    body: 'Type a city and the plume line follows your typing. Submit with a photo or a visibility guess and the API returns a haze score plus a confidence value.',
+    body: 'Click the map to drop a pin, or use the selected city centre. Submit with a photo or a visibility guess; the server assigns the nearest city and returns a heuristic estimate with a trust weight.',
   },
   {
     target: 'map',
     tab: 'map',
-    title: 'Pins land on the map',
-    body: 'Each report is plotted where it was filed and coloured by severity. The three federated cohort nodes are marked in ochre; every other city stays a quiet outline so citizen readings are the loud marks.',
+    title: 'Every city is a node',
+    body: 'Filled markers are tier-1 cities with ground monitoring; rings have weather/satellite data only; dashed rings are inferred from neighbours. Marker size tracks the latest AQI.',
   },
   {
     target: 'fed-chart',
     tab: 'federated',
     title: 'Weights travel, data does not',
-    body: 'Start a run and watch three faint local loss lines draw in, then the aggregated global line. No raw observation is ever pooled on the server.',
+    body: 'Start a run and every tier-1 city trains locally on its own daily records; only model weights are averaged. The table below compares the federated model against persistence and local-only baselines, exactly as measured.',
   },
   {
     target: 'alerts-list',
     tab: 'alerts',
     title: 'Thresholds become actions',
-    body: 'When a 72-hour forecast crosses a GRAP threshold, the alert carries the real graded-response action for that stage, and can be acknowledged here.',
+    body: 'When the worst +1/+2/+3 day forecast crosses 200, an alert fires with the GRAP stage for Delhi-NCR cities or an advisory elsewhere, and can be acknowledged here.',
   },
 ]
 

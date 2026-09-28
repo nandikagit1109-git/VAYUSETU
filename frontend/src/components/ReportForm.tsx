@@ -1,48 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { submitReport } from '../api'
-import type { CitizenReport } from '../types'
-import PlumeLine from './PlumeLine'
-import { hazeColor } from './MapView'
-import { CITIES, CITY_COORDS } from '../cities'
-
-interface Props {
-  onCreated: (report: CitizenReport) => void
-}
+import type { CitizenReport, ReportResult } from '../types'
+import { aqiColor } from './AqiBadge'
 
 type Visibility = '' | 'clear' | 'hazy' | 'very_hazy'
 
-export default function ReportForm({ onCreated }: Props) {
-  const [cityInput, setCityInput] = useState('Delhi')
-  const [lat, setLat] = useState(String(CITY_COORDS.delhi[0]))
-  const [lon, setLon] = useState(String(CITY_COORDS.delhi[1]))
+interface Props {
+  pinnedLatLon: { lat: number; lon: number }
+  onCreated: (report: CitizenReport, result: ReportResult) => void
+}
+
+// ReportForm: the server assigns the city from the pinned coordinates (there is
+// no client city field in the v2 contract, trap 15). Latitude/longitude come
+// from a map click or the "use city centre" control on the selected city.
+export default function ReportForm({ pinnedLatLon, onCreated }: Props) {
+  const [lat, setLat] = useState(String(pinnedLatLon.lat.toFixed(4)))
+  const [lon, setLon] = useState(String(pinnedLatLon.lon.toFixed(4)))
   const [visibility, setVisibility] = useState<Visibility>('')
   const [photoBase64, setPhotoBase64] = useState<string | null>(null)
   const [photoName, setPhotoName] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [result, setResult] = useState<CitizenReport | null>(null)
+  const [result, setResult] = useState<ReportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  // An exact key or label match wins; otherwise a prefix that identifies exactly
-  // one city still settles the plume line. Worth having now that the network runs
-  // to forty-odd names and nobody wants to type Thiruvananthapuram in full.
-  const matched = useMemo(() => {
-    const q = cityInput.trim().toLowerCase()
-    if (!q) return null
-    const exact = CITIES.find((c) => c.key === q || c.label.toLowerCase() === q)
-    if (exact) return exact.key
-    if (q.length < 2) return null
-    const hits = CITIES.filter((c) => c.key.startsWith(q) || c.label.toLowerCase().startsWith(q))
-    return hits.length === 1 ? hits[0].key : null
-  }, [cityInput])
-  const city = matched ?? (cityInput.trim().toLowerCase() || 'delhi')
-
-  useEffect(() => {
-    if (!matched) return
-    const coords = CITY_COORDS[matched]
-    setLat(String(coords[0]))
-    setLon(String(coords[1]))
-  }, [matched])
 
   function handlePhoto(file: File | null) {
     setResult(null)
@@ -68,15 +48,12 @@ export default function ReportForm({ onCreated }: Props) {
 
     const latitude = Number(lat)
     const longitude = Number(lon)
-    if (
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude) ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
-    ) {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       setError('Latitude and longitude must be valid numbers.')
+      return
+    }
+    if (latitude < 6.5 || latitude > 37.5 || longitude < 68.0 || longitude > 97.5) {
+      setError('Coordinates must be inside India (lat 6.5-37.5, lon 68.0-97.5).')
       return
     }
     if (!photoBase64 && !visibility) {
@@ -89,22 +66,24 @@ export default function ReportForm({ onCreated }: Props) {
       const res = await submitReport({
         latitude,
         longitude,
-        city,
         photo_base64: photoBase64,
         manual_visibility: (visibility || null) as 'clear' | 'hazy' | 'very_hazy' | null,
       })
-      const pin: CitizenReport = {
-        id: res.id,
-        latitude,
-        longitude,
-        city,
-        haze_score: res.haze_score,
-        confidence: res.confidence,
-        trust_weight: 1.0,
-        created_at: new Date().toISOString(),
-      }
-      setResult(pin)
-      onCreated(pin)
+      setResult(res)
+      onCreated(
+        {
+          id: res.id,
+          latitude,
+          longitude,
+          city_id: res.city_id,
+          haze_score: res.haze_score,
+          confidence: res.confidence,
+          trust_weight: res.trust_weight,
+          source: 'user',
+          created_at: new Date().toISOString(),
+        },
+        res,
+      )
       setPhotoBase64(null)
       setPhotoName(null)
       setVisibility('')
@@ -121,27 +100,9 @@ export default function ReportForm({ onCreated }: Props) {
     <form onSubmit={handleSubmit} className="panel p-5" data-tour="report-form">
       <h2 className="font-display text-lg font-bold text-soot">Citizen Report</h2>
       <p className="measure mt-1 mb-4 text-xs leading-relaxed text-ash">
-        Submit a sky photo or a manual visibility reading. You get an instant haze/AQI-proxy score and a pin on the map.
+        Click the map to drop the report location (or use the selected city&apos;s centre). The server assigns
+        the nearest city within coverage. Scored as a <strong>heuristic estimate</strong>, not a measurement.
       </p>
-
-      <PlumeLine value={cityInput} complete={matched !== null} />
-      <label className="label" htmlFor="report-city">
-        City
-      </label>
-      <input
-        id="report-city"
-        list="report-city-options"
-        value={cityInput}
-        onChange={(e) => setCityInput(e.target.value)}
-        className="field mb-3"
-        autoComplete="off"
-        placeholder="Type a city, e.g. Delhi"
-      />
-      <datalist id="report-city-options">
-        {CITIES.map((c) => (
-          <option key={c.key} value={c.label} />
-        ))}
-      </datalist>
 
       <div className="mb-3 grid grid-cols-2 gap-3">
         <div>
@@ -206,12 +167,12 @@ export default function ReportForm({ onCreated }: Props) {
       {error && <div className="banner-warn mt-3">{error}</div>}
       {result && (
         <div className="note mt-3">
-          <span className="font-semibold text-soot">Report #{result.id} scored:</span>{' '}
-          <span className="tnum font-semibold" style={{ color: hazeColor(result.haze_score) }}>
-            haze {result.haze_score.toFixed(0)} / 500
+          <span className="font-semibold text-soot">Report #{result.id} assigned to {result.city_id}:</span>{' '}
+          <span className="tnum font-semibold" style={{ color: aqiColor(result.haze_score) }}>
+            {result.haze_score.toFixed(0)} / 500
           </span>{' '}
           <span className="text-ash">
-            · confidence <span className="tnum">{(result.confidence * 100).toFixed(0)}%</span> · pin added to map
+            · heuristic estimate · trust <span className="tnum">{result.trust_weight.toFixed(2)}</span> · pin added
           </span>
         </div>
       )}

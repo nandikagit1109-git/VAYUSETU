@@ -1,34 +1,58 @@
-"""Shared small PyTorch model — identical architecture for all FL clients
-(federated averaging requires this). Input: last 24 hourly AQI values
-(normalised to 0-1). Output: next-hour AQI (normalised)."""
+"""Shared GRU model (section 6). Same architecture and same initial weights
+(seed 42) for every client and for the local-only baselines."""
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
-INPUT_LEN = 24
-AQI_SCALE = 500.0
+INPUT_SIZE = 23
+HIDDEN_SIZE = 32
+NUM_LAYERS = 1
+OUTPUT_SIZE = 3
 
 
-class AQIMLP(nn.Module):
-    def __init__(self):
+def seed_everything(seed: int) -> None:
+    import random
+
+    random.seed(seed)
+    try:
+        import numpy as np
+
+        np.random.seed(seed)
+    except Exception:
+        pass
+    torch.manual_seed(seed)
+
+
+def build_model(seed: int = 42) -> nn.Module:
+    torch.manual_seed(seed)
+    return nn.Sequential(
+        GRUFeatureExtractor(INPUT_SIZE, HIDDEN_SIZE, NUM_LAYERS),
+        nn.Linear(HIDDEN_SIZE, OUTPUT_SIZE),
+    )
+
+
+class GRUFeatureExtractor(nn.Module):
+    def __init__(self, input_size: int, hidden_size: int, num_layers: int) -> None:
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(INPUT_LEN, 32),
-            nn.ReLU(),
-            nn.Linear(32, 16),
-            nn.ReLU(),
-            nn.Linear(16, 1),
+        self.gru = nn.GRU(
+            input_size=input_size, hidden_size=hidden_size,
+            num_layers=num_layers, batch_first=True,
         )
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
 
-    def forward(self, x):
-        return self.net(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (batch, seq, features) -> last time step's hidden state.
+        out, _ = self.gru(x)
+        return out[:, -1, :]
 
 
-def get_params(model: nn.Module) -> list[np.ndarray]:
-    return [v.detach().cpu().numpy().copy() for v in model.state_dict().values()]
+def get_parameters(model: nn.Module) -> list:
+    return [p.detach().clone().numpy().astype("float32") for p in model.state_dict().values()]
 
 
-def set_params(model: nn.Module, params: list[np.ndarray]) -> None:
-    state = model.state_dict()
-    new_state = {k: torch.tensor(np.array(v, copy=True)) for k, v in zip(state.keys(), params)}
-    model.load_state_dict(new_state)
+def set_parameters(model: nn.Module, params: list) -> None:
+    state_dict = {}
+    for (name, _), arr in zip(model.state_dict().items(), params):
+        state_dict[name] = torch.tensor(np.asarray(arr), dtype=torch.float32)
+    model.load_state_dict(state_dict)
