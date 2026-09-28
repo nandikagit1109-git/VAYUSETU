@@ -62,9 +62,8 @@ def evaluate_and_write(
     names = name_by_id or {}
 
     def _baseline_for(client: FLClient) -> tuple:
-        """Local-only training (same seeded init, city alone) + persistence +
-        federated MAE for one client. Runs in a worker thread; the client owns
-        all arrays and models it touches, so this is thread-safe."""
+        """All baselines for one client. Runs in a worker thread; the client
+        owns every array and model it touches, so this is thread-safe."""
         # Local-only: train from the same seeded init on this city alone.
         with _INIT_LOCK:
             local_model = build_model(client.seed)
@@ -96,10 +95,25 @@ def evaluate_and_write(
         # Federated: the global model on this city's validation set.
         set_parameters(local_model, global_params)
         mae_fed, _ = _mae_per_horizon(local_model, client.X_val, client.y_val)
-        return client, mae_persist, mae_local, mae_fed, n_val
+
+        # Personalized: from the final global parameters, fine-tune 2 local
+        # epochs on this city's own data only (nothing is sent anywhere) —
+        # a standard federated-learning finding worth reporting.
+        opt_p = torch.optim.Adam(local_model.parameters(), lr=client.lr)
+        for _epoch in range(client.local_epochs):
+            local_model.train()
+            order = torch.randperm(X.shape[0], generator=gen)
+            for start in range(0, X.shape[0], client.batch_size):
+                idx = order[start:start + client.batch_size]
+                opt_p.zero_grad()
+                loss = nn.functional.mse_loss(local_model(X[idx.numpy()]), y[idx.numpy()])
+                loss.backward()
+                opt_p.step()
+        mae_personalized, _ = _mae_per_horizon(local_model, client.X_val, client.y_val)
+        return client, mae_persist, mae_local, mae_fed, mae_personalized, n_val
 
     with ThreadPoolExecutor(max_workers=min(8, len(clients))) as pool:
-        for client, mae_persist, mae_local, mae_fed, n_val in pool.map(_baseline_for, clients):
+        for client, mae_persist, mae_local, mae_fed, mae_personalized, n_val in pool.map(_baseline_for, clients):
             def _mean(vals: list[float]) -> float:
                 clean = [v for v in vals if not math.isnan(v)]
                 return float(np.mean(clean)) if clean else float("nan")
@@ -111,13 +125,15 @@ def evaluate_and_write(
                 "mae_persistence": round(_mean(mae_persist), 1),
                 "mae_local": round(_mean(mae_local), 1),
                 "mae_federated": round(_mean(mae_fed), 1),
+                "mae_personalized": round(_mean(mae_personalized), 1),
             })
-            # Per-horizon detail is logged, not shipped (contract keeps rows at 6 keys).
-            logger.info("%s MAE per horizon - persistence %s local %s federated %s",
+            # Per-horizon detail is logged, not shipped.
+            logger.info("%s MAE per horizon - persistence %s local %s federated %s personalized %s",
                         client.city_id,
                         [round(v, 1) for v in mae_persist],
                         [round(v, 1) for v in mae_local],
-                        [round(v, 1) for v in mae_fed])
+                        [round(v, 1) for v in mae_fed],
+                        [round(v, 1) for v in mae_personalized])
 
     def _overall(key: str) -> float | None:
         vals = [r[key] for r in rows if not math.isnan(r[key])]
@@ -132,6 +148,7 @@ def evaluate_and_write(
         "mean_mae_persistence": _overall("mae_persistence"),
         "mean_mae_local": _overall("mae_local"),
         "mean_mae_federated": _overall("mae_federated"),
+        "mean_mae_personalized": _overall("mae_personalized"),
     }
     if residual_p90_by_horizon is not None:
         payload["residual_p90_by_horizon"] = [round(float(v), 1) for v in residual_p90_by_horizon]

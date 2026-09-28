@@ -62,8 +62,8 @@ export interface FlStatus {
   clients: string[]; excluded: { city_id: string; reason: string }[];
   started_at: string | null; completed_at: string | null; error: string | null;
 }
-export interface FlEvalRow { city_id: string; name: string; n_val: number; mae_persistence: number; mae_local: number; mae_federated: number; }
+export interface FlEvalRow { city_id: string; name: string; n_val: number; mae_persistence: number; mae_local: number; mae_federated: number; mae_personalized: number; }
 export interface FlEval {
   available: boolean; rows: FlEvalRow[];
-  mean_mae_persistence: number | null; mean_mae_local: number | null; mean_mae_federated: number | null;
+  mean_mae_persistence: number | null; mean_mae_local: number | null; mean_mae_federated: number | null; mean_mae_personalized: number | null;
 }

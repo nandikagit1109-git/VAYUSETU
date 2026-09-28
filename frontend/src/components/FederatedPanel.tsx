@@ -212,7 +212,8 @@ export default function FederatedPanel() {
             <h3 className="font-display text-sm font-bold text-soot">Did federation help?</h3>
             <p className="mt-1 mb-3 text-xs leading-relaxed text-ash">
               Validation MAE (AQI points) per city, reported exactly as measured: persistence baseline, local-only
-              training, and the federated model.
+              training, the shared federated model, and the federated model after a light per-city fine-tune
+              (personalized).
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -222,6 +223,7 @@ export default function FederatedPanel() {
                     <th className="py-1.5 px-2 text-right font-medium">Persist.</th>
                     <th className="py-1.5 px-2 text-right font-medium">Local</th>
                     <th className="py-1.5 px-2 text-right font-medium">Federated</th>
+                    <th className="py-1.5 px-2 text-right font-medium">Personalized</th>
                   </tr>
                 </thead>
                 <tbody className="tnum">
@@ -233,6 +235,7 @@ export default function FederatedPanel() {
                       <td className={`py-1.5 px-2 text-right font-semibold ${r.mae_federated <= Math.min(r.mae_persistence, r.mae_local) ? 'text-ochre' : ''}`}>
                         {r.mae_federated.toFixed(1)}
                       </td>
+                      <td className="py-1.5 px-2 text-right">{r.mae_personalized.toFixed(1)}</td>
                     </tr>
                   ))}
                   <tr className="font-semibold text-soot">
@@ -240,6 +243,7 @@ export default function FederatedPanel() {
                     <td className="py-1.5 px-2 text-right">{evalData.mean_mae_persistence?.toFixed(1) ?? '—'}</td>
                     <td className="py-1.5 px-2 text-right">{evalData.mean_mae_local?.toFixed(1) ?? '—'}</td>
                     <td className="py-1.5 px-2 text-right">{evalData.mean_mae_federated?.toFixed(1) ?? '—'}</td>
+                    <td className="py-1.5 px-2 text-right">{evalData.mean_mae_personalized?.toFixed(1) ?? '—'}</td>
                   </tr>
                 </tbody>
               </table>

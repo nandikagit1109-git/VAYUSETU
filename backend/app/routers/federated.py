@@ -39,5 +39,6 @@ def federated_eval():
     data = load_eval()
     if not data:
         return {"available": False, "rows": [], "mean_mae_persistence": None,
-                "mean_mae_local": None, "mean_mae_federated": None}
+                "mean_mae_local": None, "mean_mae_federated": None,
+                "mean_mae_personalized": None}
     return data

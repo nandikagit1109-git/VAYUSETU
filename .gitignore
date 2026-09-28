@@ -19,3 +19,7 @@ frontend/dist/
 # --- local deploy logs ---
 backend/server.log
 frontend/vite.log
+
+# --- vercel local artifacts ---
+frontend/vercel_login.log
+.vercel

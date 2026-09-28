@@ -142,6 +142,7 @@ class FlEvalRow(BaseModel):
     mae_persistence: float
     mae_local: float
     mae_federated: float
+    mae_personalized: float
 
 
 class FlEval(BaseModel):
@@ -150,3 +151,4 @@ class FlEval(BaseModel):
     mean_mae_persistence: Optional[float] = None
     mean_mae_local: Optional[float] = None
     mean_mae_federated: Optional[float] = None
+    mean_mae_personalized: Optional[float] = None

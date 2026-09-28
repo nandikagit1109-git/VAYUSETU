@@ -272,7 +272,7 @@ def test_federated_eval_contract_before_run(client):
     assert r.status_code == 200
     body = r.json()
     assert set(body) == {"available", "rows", "mean_mae_persistence",
-                         "mean_mae_local", "mean_mae_federated"}
+                         "mean_mae_local", "mean_mae_federated", "mean_mae_personalized"}
     if not body["available"]:
         assert body["rows"] == []
     _no_nan(body)

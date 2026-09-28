@@ -81,7 +81,7 @@ def main() -> int:
             check("fl_eval rows for every client", len(eval_data["rows"]) == len(fl["clients"]))
             means = ("mean_mae_persistence", "mean_mae_local", "mean_mae_federated")
             check("fl_eval has all three means", all(isinstance(eval_data[m], (int, float)) for m in means))
-            mae_rows = {"city_id", "name", "n_val", "mae_persistence", "mae_local", "mae_federated"}
+            mae_rows = {"city_id", "name", "n_val", "mae_persistence", "mae_local", "mae_federated", "mae_personalized"}
             check("fl_eval row keys exact", all(set(r) == mae_rows for r in eval_data["rows"]))
 
         print("[3/4] Checking forecasts, hotspots, reports, alerts...")
