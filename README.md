@@ -10,7 +10,21 @@ hotspots with wind-based downwind transport, blends citizen reports into
 per-city adjusted AQI, and fires alerts with GRAP/advisory actions —
 **fully functional offline** on seeded synthetic demonstration data.
 
-## Start everything (one command)
+## Cloud deployment (Render + Vercel)
+
+The backend runs on Render and the frontend on Vercel; the Vercel `/api/*`
+rewrite proxies to the Render service, so the browser stays same-origin.
+
+1. **Backend (Render):** fork/import `nandikagit1109-git/VAYUSETU` at
+   [dashboard.render.com](https://dashboard.render.com) — the repo's
+   `render.yaml` blueprint defines the service (CPU-only torch, `/health`
+   check, free plan). First deploy builds ~5 min and trains the model on boot.
+2. **Frontend (Vercel):** import the same repo at
+   [vercel.com/new](https://vercel.com/new) with root directory `frontend` —
+   `frontend/vercel.json` already rewrites `/api/*` to
+   `https://vayusetu-backend.onrender.com`.
+
+## Start everything locally (one command)
 
 ```bash
 docker compose up --build
