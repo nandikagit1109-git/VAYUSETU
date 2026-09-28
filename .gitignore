@@ -15,3 +15,7 @@ frontend/dist/
 # --- env / os ---
 .env
 .DS_Store
+
+# --- local deploy logs ---
+backend/server.log
+frontend/vite.log

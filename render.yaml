@@ -1,0 +1,24 @@
+# Render Blueprint for the VayuSetu backend.
+# Deploy: Render dashboard -> New + -> Blueprint -> pick this repo -> Apply.
+# The service name determines the public URL: https://vayusetu-backend.onrender.com
+services:
+  - type: web
+    name: vayusetu-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    # CPU-only torch first (no CUDA wheels on the server), then the pinned stack.
+    # The master table is rebuilt at startup (data/processed is not committed).
+    buildCommand: pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATA_MODE
+        value: synthetic
+      - key: AUTO_TRAIN_ON_START
+        value: "true"
+      - key: VAYUSETU_DB_URL
+        value: sqlite:////tmp/vayusetu.db
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+    autoDeploy: true
