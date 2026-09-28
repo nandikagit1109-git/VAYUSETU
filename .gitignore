@@ -1,10 +1,9 @@
 # --- runtime artifacts ---
 backend/.venv/
-backend/vayusetu.db
-backend/test_vayusetu.db
-backend/verify_tmp.db
+backend/*.db
 backend/data/processed/
 backend/app/federated/*.json.tmp
+backend/smoke_*.log
 __pycache__/
 *.pyc
 .pytest_cache/
