@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { submitReport } from '../api'
 import type { CitizenReport, ReportResult } from '../types'
@@ -14,9 +14,19 @@ interface Props {
 // ReportForm: the server assigns the city from the pinned coordinates (there is
 // no client city field in the v2 contract, trap 15). Latitude/longitude come
 // from a map click or the "use city centre" control on the selected city.
+// The lat/lon fields track the pin while the user has not typed over them —
+// otherwise a map click updates the pin but the form silently submits the
+// old coordinates (this exact stale-pin bug broke a recorded demo run).
 export default function ReportForm({ pinnedLatLon, onCreated }: Props) {
   const [lat, setLat] = useState(String(pinnedLatLon.lat.toFixed(4)))
   const [lon, setLon] = useState(String(pinnedLatLon.lon.toFixed(4)))
+  const [coordsDirty, setCoordsDirty] = useState(false)
+
+  useEffect(() => {
+    if (coordsDirty) return
+    setLat(pinnedLatLon.lat.toFixed(4))
+    setLon(pinnedLatLon.lon.toFixed(4))
+  }, [pinnedLatLon.lat, pinnedLatLon.lon, coordsDirty])
   const [visibility, setVisibility] = useState<Visibility>('')
   const [photoBase64, setPhotoBase64] = useState<string | null>(null)
   const [photoName, setPhotoName] = useState<string | null>(null)
@@ -115,7 +125,10 @@ export default function ReportForm({ pinnedLatLon, onCreated }: Props) {
             type="number"
             step="any"
             value={lat}
-            onChange={(e) => setLat(e.target.value)}
+            onChange={(e) => {
+              setCoordsDirty(true)
+              setLat(e.target.value)
+            }}
           />
         </div>
         <div>
@@ -128,7 +141,10 @@ export default function ReportForm({ pinnedLatLon, onCreated }: Props) {
             type="number"
             step="any"
             value={lon}
-            onChange={(e) => setLon(e.target.value)}
+            onChange={(e) => {
+              setCoordsDirty(true)
+              setLon(e.target.value)
+            }}
           />
         </div>
       </div>

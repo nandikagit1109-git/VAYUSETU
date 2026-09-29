@@ -9,6 +9,7 @@ import hashlib
 import logging
 import threading
 import time
+from collections import deque
 
 from fastapi import APIRouter, Request
 from sqlmodel import col, select
@@ -30,22 +31,36 @@ INDIA_LON = (68.0, 97.5)
 
 # Rate limit: 20 report submissions per minute per client IP, in-memory
 # sliding window. Prevents a stuck retry loop from flooding the map (section 12).
+# Per-IP deques (not one shared list): checking never scans every client's
+# history, and each deque is capped so a chatty client cannot grow memory.
 _RATE_LIMIT = 20
 _RATE_WINDOW_S = 60.0
 _rate_lock = threading.Lock()
-_rate_hits: list[tuple[float, str]] = []
+_rate_hits: dict[str, deque[float]] = {}
+_MAX_TRACKED_IPS = 10_000
 
 
 def _check_rate_limit(client_ip: str) -> bool:
     now = time.monotonic()
     with _rate_lock:
-        # Drop entries outside the window.
-        while _rate_hits and now - _rate_hits[0][0] > _RATE_WINDOW_S:
-            _rate_hits.pop(0)
-        hits = sum(1 for _t, ip in _rate_hits if ip == client_ip)
-        if hits >= _RATE_LIMIT:
+        hits = _rate_hits.get(client_ip)
+        if hits is None:
+            if len(_rate_hits) >= _MAX_TRACKED_IPS:
+                # Evict fully-expired IPs before refusing new ones.
+                stale = [ip for ip, q in _rate_hits.items() if not q or now - q[-1] > _RATE_WINDOW_S]
+                for ip in stale:
+                    del _rate_hits[ip]
+                if len(_rate_hits) >= _MAX_TRACKED_IPS:
+                    _rate_hits.clear()  # extreme case: reset rather than grow
+            hits = _rate_hits[client_ip] = deque(maxlen=_RATE_LIMIT)
+        # Drop entries outside the window (deque is ordered by time).
+        while hits and now - hits[0] > _RATE_WINDOW_S:
+            hits.popleft()
+        if len(hits) >= _RATE_LIMIT:
+            # Record nothing on a rejected request: a 429 storm must not
+            # extend the client's own ban window.
             return False
-        _rate_hits.append((now, client_ip))
+        hits.append(now)
         return True
 
 

@@ -2,11 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY requirements.txt requirements.lock ./
 # CPU-only torch wheels first (no CUDA needed for the demo), then the rest.
+# The lockfile wins when present (exact resolved versions); requirements.txt
+# is the range-based fallback so the build never depends on lock freshness.
 RUN pip install --no-cache-dir torch==2.4.1 \
       --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir $( [ -s requirements.lock ] \
+        && echo "--no-deps -r requirements.lock" || echo "-r requirements.txt" )
 
 COPY app ./app
 COPY scripts ./scripts

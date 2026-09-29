@@ -42,6 +42,15 @@ class ForecastUnavailable(Exception):
     pass
 
 
+def _h_change_std(aqi_series: pd.Series, h: int) -> float:
+    """Historical std of h-day AQI change; shared by persistence bounds."""
+    change = (aqi_series - aqi_series.shift(h)).dropna()
+    std = float(change.std()) if len(change) >= 2 else 15.0
+    if math.isnan(std) or std <= 0:
+        std = 15.0
+    return std
+
+
 def _add_days(date_str: str, days: int) -> str:
     from datetime import date, timedelta
 
@@ -98,14 +107,15 @@ def _persistence_forecast(store, city_id: str) -> dict:
     points = [{
         "date": store.demo_now, "horizon_days": 0,
         "predicted_aqi": round(aqi, 1),
-        "lower_bound": round(max(0.0, aqi - 5), 1), "upper_bound": round(min(500.0, aqi + 5), 1),
+        # Horizon-0 band: 1-day-change std is the honest proxy for the very
+        # next-day spread; a hardcoded 5 understated it by an order of
+        # magnitude on volatile days.
+        "lower_bound": round(max(0.0, aqi - _h_change_std(aqi_series, 1)), 1),
+        "upper_bound": round(min(500.0, aqi + _h_change_std(aqi_series, 1)), 1),
         "observed": True,
     }]
     for h in (1, 2, 3):
-        change = (aqi_series - aqi_series.shift(h)).dropna()
-        std = float(change.std()) if len(change) >= 2 else 15.0
-        if math.isnan(std):
-            std = 15.0
+        std = _h_change_std(aqi_series, h)
         points.append({
             "date": _add_days(store.demo_now, h), "horizon_days": h,
             "predicted_aqi": round(aqi, 1),
@@ -157,7 +167,7 @@ def _model_forecast(store, city_id: str, version: str, params) -> dict:
         "lower_bound": round(max(0.0, aqi - 5), 1), "upper_bound": round(min(500.0, aqi + 5), 1),
         "observed": True,
     }]
-    for i, h in enumerate((1, 2, 3)):
+    for i, h in enumerate((1, 2, 3)):  # noqa: B007 (i used for residual index)
         pred = preds[i]
         q10 = residual_p90[i] if i < len(residual_p90) else 15.0
         lower = float(np.clip(pred - q10, 0.0, 500.0))

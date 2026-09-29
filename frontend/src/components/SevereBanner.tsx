@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { checkAlerts, getAlerts } from '../api'
 import type { Alert } from '../types'
@@ -29,6 +29,11 @@ export default function SevereBanner({ suppressed, onView }: SevereBannerProps) 
   const reduced = useReducedMotion()
   const [worst, setWorst] = useState<Alert | null>(null)
   const [dismissed, setDismissed] = useState<number[]>([])
+  // Ref mirror of `dismissed`: the polling interval below closes over the
+  // FIRST render's state otherwise, so a dismissed alert would resurrect on
+  // the next poll (classic stale-closure bug).
+  const dismissedRef = useRef<number[]>([])
+  dismissedRef.current = dismissed
 
   useEffect(() => {
     // On the Alerts tab that panel owns the threshold check and the list; stay quiet here.
@@ -40,7 +45,7 @@ export default function SevereBanner({ suppressed, onView }: SevereBannerProps) 
         const data = await getAlerts()
         if (!live) return
         const candidates = (data.alerts ?? [])
-          .filter((a) => !a.acknowledged && BANNER_SEVERITIES.has(a.severity) && !dismissed.includes(a.id))
+          .filter((a) => !a.acknowledged && BANNER_SEVERITIES.has(a.severity) && !dismissedRef.current.includes(a.id))
           .sort((a, b) => {
             const rank = (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
             if (rank !== 0) return rank
@@ -57,7 +62,6 @@ export default function SevereBanner({ suppressed, onView }: SevereBannerProps) 
       live = false
       window.clearInterval(t)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suppressed])
 
   const visible = Boolean(worst) && !suppressed

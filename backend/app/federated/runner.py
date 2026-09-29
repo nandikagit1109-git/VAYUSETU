@@ -150,6 +150,15 @@ def run_training(store, done_callback=None) -> None:
         _state["running"] = True
         _state["status"] = "running"
         _state["error"] = None
+        # Claim the status file immediately: without this, a thread that dies
+        # between the flag flip and the first _write_status_atomic leaves the
+        # status file saying "completed" from the PREVIOUS run while the API
+        # reports "running" forever (silent-exit bug).
+        _write_status_atomic({
+            "status": "running", "rounds": [], "total_rounds": FL_ROUNDS,
+            "clients": [], "excluded": [], "started_at": _utcnow(),
+            "completed_at": None, "error": None,
+        })
 
     status: dict = {
         "status": "running",

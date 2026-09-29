@@ -128,8 +128,12 @@ def get_hotspots(store) -> list[dict]:
             g = store.master[(store.master["city_id"] == nearest_t1.city_id)
                              & (store.master["pm25"].notna())]
             if len(g):
-                row = g.loc[g[g["date"] <= store.demo_now]["date"].idxmax()] if (g["date"] <= store.demo_now).any() else g.iloc[-1]
-                pm25_ref = float(row["pm25"])
+                g = g[g["date"] <= store.demo_now]
+                if len(g):
+                    # Sorted-by-date tail, not idxmax(): idxmax is positional
+                    # and silently returns the last loaded row on unsorted data.
+                    row = g.sort_values("date").iloc[-1]
+                    pm25_ref = float(row["pm25"])
         confidence = min(0.9, max(0.2, pm25_ref / 150.0))
         wind_from, wind_speed = _wind_for_point(store, lat, lon)
         hotspot = {

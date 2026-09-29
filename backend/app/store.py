@@ -125,7 +125,9 @@ class DataStore:
         g = g[g["aqi"].notna()]
         if g.empty:
             return None, None
-        row = g.loc[g["date"].idxmax()]
+        # Sort by ISO date string: index-based idxmax is positional and would
+        # silently return the last LOADED row if a file is ever unsorted.
+        row = g.sort_values("date").iloc[-1]
         return float(row["aqi"]), str(row["date"])
 
     def history(self, city_id: str, days: int) -> list[dict]:

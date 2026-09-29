@@ -49,6 +49,11 @@ def decode_photo(photo_base64: str, max_bytes: int) -> bytes:
         idx = payload.find(",")
         if idx != -1:
             payload = payload[idx + 1:]
+    # Cheap pre-check BEFORE decoding: base64 is 4 chars per 3 bytes, so a
+    # payload longer than 4/3 * max_bytes must exceed the limit. Rejecting
+    # here stops a multi-GB string from being materialised in memory first.
+    if len(payload) > (max_bytes // 3 + 1) * 4:
+        raise ImageTooLarge(f"photo exceeds {max_bytes} bytes")
     try:
         raw = base64.b64decode(payload, validate=False)
     except (binascii.Error, ValueError) as exc:
