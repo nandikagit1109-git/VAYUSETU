@@ -18,6 +18,7 @@ class Meta(BaseModel):
     n_tier3: int
     model_version: Optional[str] = None
     model_method: Literal["federated_gru", "persistence"]
+    sources: List[str] = []
     fl_status: Literal["idle", "running", "completed", "failed"]
 
 
@@ -100,6 +101,29 @@ class Forecast(BaseModel):
     method: Literal["federated_gru", "persistence", "neighbor_idw"]
     model_version: Optional[str] = None
     points: List[ForecastPoint]
+
+
+class PointAqiContributor(BaseModel):
+    city_id: str
+    name: str
+    distance_km: float
+    weight: float
+    latest_aqi: float
+
+
+class PointAqi(BaseModel):
+    latitude: float
+    longitude: float
+    estimated_aqi: float
+    category: str
+    method: Literal["idw_point_interpolation"]
+    confidence: float
+    as_of: str
+    nearest_city_id: str
+    nearest_city_name: str
+    nearest_city_distance_km: float
+    contributing_cities: List[PointAqiContributor]
+    nearby_reports_considered: int
 
 
 class Alert(BaseModel):

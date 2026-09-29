@@ -10,12 +10,14 @@ services:
       - DATA_MODE=${DATA_MODE:-synthetic}
       - AUTO_TRAIN_ON_START=${AUTO_TRAIN_ON_START:-true}
       - REBUILD_DATA=${REBUILD_DATA:-false}
+    volumes:
+      - processed-data:/app/data/processed
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status==200 else 1)"]
-      interval: 15s
+      interval: 5s
       timeout: 5s
-      start_period: 90s
-      retries: 5
+      start_period: 30s
+      retries: 20
     restart: unless-stopped
 
   frontend:
@@ -28,3 +30,6 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  processed-data:

@@ -7,8 +7,10 @@ exists in the schema). Photos are never stored — only their SHA-256 hash.
 import base64
 import hashlib
 import logging
+import threading
+import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from sqlmodel import col, select
 
 from ..config import PHOTO_MAX_BYTES, REPORT_MAX_DISTANCE_KM
@@ -26,6 +28,26 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 INDIA_LAT = (6.5, 37.5)
 INDIA_LON = (68.0, 97.5)
 
+# Rate limit: 20 report submissions per minute per client IP, in-memory
+# sliding window. Prevents a stuck retry loop from flooding the map (section 12).
+_RATE_LIMIT = 20
+_RATE_WINDOW_S = 60.0
+_rate_lock = threading.Lock()
+_rate_hits: list[tuple[float, str]] = []
+
+
+def _check_rate_limit(client_ip: str) -> bool:
+    now = time.monotonic()
+    with _rate_lock:
+        # Drop entries outside the window.
+        while _rate_hits and now - _rate_hits[0][0] > _RATE_WINDOW_S:
+            _rate_hits.pop(0)
+        hits = sum(1 for _t, ip in _rate_hits if ip == client_ip)
+        if hits >= _RATE_LIMIT:
+            return False
+        _rate_hits.append((now, client_ip))
+        return True
+
 
 def _trust_weight(haze_score: float, ref_aqi: float | None) -> float:
     if ref_aqi is None:
@@ -34,7 +56,11 @@ def _trust_weight(haze_score: float, ref_aqi: float | None) -> float:
 
 
 @router.post("", status_code=201)
-def create_report(body: ReportCreate):
+def create_report(body: ReportCreate, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(client_ip):
+        return error_envelope("too many reports; retry in a minute", status_code=429)
+
     # Coordinate validation (India bbox).
     if not (INDIA_LAT[0] <= body.latitude <= INDIA_LAT[1]):
         return error_envelope("latitude outside India (6.5-37.5)", status_code=422)
@@ -50,8 +76,8 @@ def create_report(body: ReportCreate):
     if body.photo_base64 is not None:
         try:
             photo_raw = cv_scorer.decode_photo(body.photo_base64, PHOTO_MAX_BYTES)
-        except cv_scorer.PhotoTooLarge:
-            return error_envelope("photo too large", status_code=413)
+        except cv_scorer.ImageTooLarge:
+            return error_envelope("image too large", status_code=413)
         except cv_scorer.PhotoError:
             return error_envelope("could not read image", status_code=422)
 

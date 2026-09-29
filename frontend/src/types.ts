@@ -11,6 +11,7 @@ export interface Meta {
   n_cities: number; n_tier1: number; n_tier2: number; n_tier3: number;
   model_version: string | null;
   model_method: "federated_gru" | "persistence";
+  sources: string[];           // human-readable data provenance
   fl_status: "idle" | "running" | "completed" | "failed";
 }
 export interface City {
@@ -47,6 +48,17 @@ export interface Forecast {
   city_id: string; tier: Tier;
   method: "federated_gru" | "persistence" | "neighbor_idw";
   model_version: string | null; points: ForecastPoint[];
+}
+export interface PointAqiContributor { city_id: string; name: string; distance_km: number; weight: number; latest_aqi: number; }
+export interface PointAqi {
+  latitude: number; longitude: number;
+  estimated_aqi: number; category: string;
+  method: "idw_point_interpolation";
+  confidence: number;                 // 0-1
+  as_of: string;                       // date of the underlying ground data
+  nearest_city_id: string; nearest_city_name: string; nearest_city_distance_km: number;
+  contributing_cities: PointAqiContributor[];
+  nearby_reports_considered: number;
 }
 export interface Alert {
   id: number; city_id: string; city_name: string;

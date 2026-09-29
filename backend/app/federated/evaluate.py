@@ -26,6 +26,7 @@ from .model import build_model, get_parameters, set_parameters
 logger = logging.getLogger("vayusetu.evaluate")
 
 EVAL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed", "fl_eval.json")
+BOUNDS_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed", "forecast_bounds.json")
 
 # Model creation draws from torch's GLOBAL RNG, so parallel threads building
 # models would interleave draws and change every initialisation. Serialising
@@ -150,10 +151,16 @@ def evaluate_and_write(
         "mean_mae_federated": _overall("mae_federated"),
         "mean_mae_personalized": _overall("mae_personalized"),
     }
+    # Bounds live in their own file (section 7) so fl_eval.json keeps exactly
+    # the FlEval contract keys; the forecast service reads forecast_bounds.json.
     if residual_p90_by_horizon is not None:
-        payload["residual_p90_by_horizon"] = [round(float(v), 1) for v in residual_p90_by_horizon]
-    # The FlEval contract allows exactly six keys per row; drop the internal
-    # per-horizon breakdown before writing.
+        bounds = {str(h + 1): round(float(v), 1) for h, v in enumerate(residual_p90_by_horizon)}
+        os.makedirs(os.path.dirname(BOUNDS_PATH), exist_ok=True)
+        tmp_bounds = BOUNDS_PATH + ".tmp"
+        with open(tmp_bounds, "w", encoding="utf-8") as f:
+            json.dump(bounds, f, indent=2)
+        os.replace(tmp_bounds, BOUNDS_PATH)
+        logger.info("wrote forecast_bounds.json: %s", bounds)
 
     os.makedirs(os.path.dirname(EVAL_PATH), exist_ok=True)
     tmp_path = EVAL_PATH + ".tmp"

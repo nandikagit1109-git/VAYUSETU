@@ -116,9 +116,25 @@ def _persistence_forecast(store, city_id: str) -> dict:
     return {"method": "persistence", "model_version": None, "points": points}
 
 
-def _model_forecast(store, city_id: str, version: str, params) -> dict:
-    from ..federated.evaluate import load_eval
+def _load_forecast_bounds() -> list[float] | None:
+    """Per-horizon p90 residuals from forecast_bounds.json (section 7); a
+    corrupt or missing file is treated as absent (section 12)."""
+    import json
+    import os
 
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed", "forecast_bounds.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return None
+        vals = [float(data[str(h)]) for h in (1, 2, 3) if str(h) in data]
+        return vals if len(vals) == 3 else None
+    except Exception:
+        return None
+
+
+def _model_forecast(store, city_id: str, version: str, params) -> dict:
     window, valid_recent = _build_latest_window(store, city_id)
     if window is None:
         raise ForecastUnavailable(f"not enough recent data for {city_id}")
@@ -130,9 +146,9 @@ def _model_forecast(store, city_id: str, version: str, params) -> dict:
     preds = _window_pred_aqi(params, window)
 
     residual_p90 = [15.0, 18.0, 21.0]
-    eval_data = load_eval()
-    if eval_data and eval_data.get("residual_p90_by_horizon"):
-        residual_p90 = [float(v) for v in eval_data["residual_p90_by_horizon"]]
+    bounds = _load_forecast_bounds()
+    if bounds:
+        residual_p90 = bounds
 
     aqi, _ = store.latest_aqi(city_id)
     points = [{

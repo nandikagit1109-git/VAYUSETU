@@ -26,8 +26,26 @@ def build_meta(store: DataStore) -> Meta:
         n_tier3=tier3,
         model_version=version,
         model_method="federated_gru" if has_model else "persistence",
+        sources=_sources(store),
         fl_status=fl_status,  # type: ignore[arg-type]
     )
+
+
+def _sources(store: DataStore) -> list[str]:
+    """Data provenance from what was ACTUALLY loaded (section 12)."""
+    if store.data_mode == "synthetic":
+        return ["Synthetic generator (seed 42)"]
+    sources: list[str] = []
+    if store.fallback_reason:
+        sources.append(f"Fell back to synthetic: {store.fallback_reason}")
+    else:
+        sources.append("CPCB city-level daily: raw/cpcb/city_day.csv")
+        n_power = sum(1 for c in store.active_cities()
+                      if store.tier_of(c.city_id) in (1, 2))
+        sources.append(f"NASA POWER daily weather ({n_power} cities)")
+        sources.append("NASA FIRMS fire points" if store.fires is not None and len(store.fires)
+                       else "Fire data not loaded")
+    return sources
 
 
 def _model_state():

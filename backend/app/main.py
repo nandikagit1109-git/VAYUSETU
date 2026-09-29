@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from .config import AUTO_TRAIN_ON_START, SEED
 from .db import get_session, init_db
 from .errors import SanitizingJSONResponse, install_error_handlers
-from .routers import alerts, cities, federated, forecast, hotspots, meta, reports
+from .routers import aqi, alerts, cities, federated, forecast, hotspots, meta, reports
 from .store import DataStore
 
 logging.basicConfig(level=logging.INFO)
@@ -139,6 +139,7 @@ app = FastAPI(
 install_error_handlers(app)
 
 app.include_router(meta.router)
+app.include_router(aqi.router)
 app.include_router(cities.router)
 app.include_router(reports.router)
 app.include_router(hotspots.router)

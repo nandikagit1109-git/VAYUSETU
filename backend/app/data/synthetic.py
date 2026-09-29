@@ -1,7 +1,9 @@
 """Deterministic synthetic data generator (section 5.4).
 
 A pure function of the seed: same seed in, byte-identical master table out.
-Period 2023-12-01 .. 2025-11-30, DEMO_NOW = 2025-11-30. Randomness uses local
+Period 2023-12-01 .. 2025-11-10 inclusive (711 days), DEMO_NOW = 2025-11-10 —
+chosen so the demo "today" sits at the peak of the stubble-burning season
+(day-of-year 314, fire intensity near its maximum). Randomness uses local
 numpy Generator instances seeded from SEED so the output never depends on call
 order or on other modules consuming the global numpy RNG.
 """
@@ -17,7 +19,7 @@ from ..config import FIRE_RADIUS_KM, SEED
 EARTH_R = 6371.0088
 
 START_DATE = date(2023, 12, 1)
-END_DATE = date(2025, 11, 30)
+END_DATE = date(2025, 11, 10)  # 711 days inclusive
 DEMO_NOW = END_DATE
 
 # Stubble source point and distance bands (section 5.4).

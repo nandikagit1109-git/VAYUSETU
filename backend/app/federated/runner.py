@@ -127,6 +127,7 @@ def _build_clients(store) -> tuple[list[FLClient], list[dict], dict[str, np.ndar
         clients.append(FLClient(
             entry.city_id, X_train, y_train, X_val, y_val,
             seed=SEED, batch_size=FL_BATCH_SIZE, lr=FL_LR, local_epochs=FL_LOCAL_EPOCHS,
+            client_index=len(clients),
         ))
         # aqi(t) per validation sample: the observed AQI on each window's last
         # input day, scaled — this is what persistence predicts for all horizons.
@@ -168,6 +169,11 @@ def run_training(store, done_callback=None) -> None:
         seed_everything(SEED)
 
         clients, excluded, last_aqi_by_client = _build_clients(store)
+        # Determinism (section 6): process clients in sorted city_id order every
+        # round, regardless of how the registry happened to load.
+        clients.sort(key=lambda c: c.city_id)
+        for i, c in enumerate(clients):
+            c.client_index = i
         status["clients"] = [c.city_id for c in clients]
         status["excluded"] = excluded
         if not clients:
@@ -188,7 +194,7 @@ def run_training(store, done_callback=None) -> None:
         max_workers = min(8, len(clients))
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             for round_num in range(1, FL_ROUNDS + 1):
-                futures = [pool.submit(c.fit, global_params) for c in clients]
+                futures = [pool.submit(c.fit, global_params, round_num) for c in clients]
                 fit_results = []
                 for client, fut in zip(clients, futures):
                     params, n_train, train_loss = fut.result()

@@ -10,8 +10,10 @@ import CitySearch from './components/CitySearch'
 import FederatedPanel from './components/FederatedPanel'
 import ForecastChart from './components/ForecastChart'
 import HotspotOverlay from './components/HotspotOverlay'
+import InfoAccordion from './components/InfoAccordion'
 import MapView from './components/MapView'
 import OnboardingIntro, { hasSeenIntro } from './components/OnboardingIntro'
+import PointAqiCard from './components/PointAqiCard'
 import ReportForm from './components/ReportForm'
 import SevereBanner from './components/SevereBanner'
 import SpotlightTour from './components/SpotlightTour'
@@ -129,6 +131,7 @@ function MapReportTab() {
           </button>
         </div>
         <CityInfoCard city={selectedCity} />
+        <PointAqiCard pin={pin} />
         {(reportError || cityError) && <div className="banner-warn">{reportError ?? cityError}</div>}
         {lastResult && lastResult.scorer === 'heuristic_v1' && (
           <div className="note">Photo score is a heuristic estimate, not a measurement.</div>
@@ -238,6 +241,23 @@ export default function App() {
       {/* meta is fetched once at the shell level so the honesty label is always
           present; hooks below consume it via their own fetches. */}
       <span className="hidden" data-demo-now={meta?.demo_now ?? ''} />
+
+      {/* "About this data" (section 13): real provenance, demo date and one
+          sentence on what federated means here. Reachable from every tab. */}
+      <footer className="mx-auto w-full max-w-[1400px] px-5 pb-6">
+        <InfoAccordion title="About this data">
+          <ul className="list-disc space-y-1 pl-4">
+            {(meta?.sources ?? ['Loading data provenance…']).map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+          <p className="mt-2">
+            Demonstration clock: {meta?.demo_now ?? '—'}. Federated here means each city
+            trains on its own records and shares only model weights — raw measurements
+            never leave a city node.
+          </p>
+        </InfoAccordion>
+      </footer>
 
       <SevereBanner suppressed={tab === 'alerts' || introOpen || tourOpen} onView={() => setTab('alerts')} />
 

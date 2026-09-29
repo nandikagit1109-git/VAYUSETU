@@ -1,9 +1,12 @@
 """Alert generation (section 9.2).
 
 POST /api/alerts/check: for each city with a forecast, take the horizon 1-3
-point with the highest predicted_aqi; map to severity; insert an alert unless
-an un-acknowledged one for the same city+severity already exists. Idempotent
-by construction. A threading.Lock serialises concurrent checks.
+point with the highest predicted_aqi; map to severity; insert one only if NO
+alert of any state (acknowledged or not) exists for the same city_id +
+severity + forecast_date. Deduplicating on un-acknowledged alerts only would
+recreate an alert 30 seconds after the user acknowledges it, because the UI
+calls this endpoint every 30 s. Idempotent by construction. A threading.Lock
+serialises concurrent checks.
 """
 import json
 import logging
@@ -62,7 +65,7 @@ def check_alerts(store) -> int:
                     select(AlertRow).where(
                         col(AlertRow.city_id) == entry.city_id,
                         col(AlertRow.severity) == severity,
-                        col(AlertRow.acknowledged) == False,  # noqa: E712
+                        col(AlertRow.forecast_date) == worst["date"],
                     )
                 ).first()
                 if existing is not None:

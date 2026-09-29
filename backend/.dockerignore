@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+data/processed/
+data/raw/*
+!data/raw/README.md
+!data/raw/.gitkeep
+verify_tmp.db
+*.db
+results/

@@ -33,8 +33,10 @@ def test_meta_contract(client):
     body = r.json()
     assert set(body) == {
         "data_mode", "fallback_reason", "demo_now", "n_cities",
-        "n_tier1", "n_tier2", "n_tier3", "model_version", "model_method", "fl_status",
+        "n_tier1", "n_tier2", "n_tier3", "model_version", "model_method",
+        "sources", "fl_status",
     }
+    assert isinstance(body["sources"], list) and body["sources"]
     assert body["data_mode"] in ("synthetic", "real")
     assert body["model_method"] in ("federated_gru", "persistence")
     assert body["fl_status"] in ("idle", "running", "completed", "failed")
@@ -211,6 +213,17 @@ def test_forecast_requires_city(client):
 
 
 def test_alerts_flow_contract(client):
+    # Start from an empty alert table: dedupe is keyed on city+severity+date,
+    # so other tests' checks would (correctly) suppress creation here.
+    from sqlmodel import delete
+
+    from app.db import get_session
+    from app.tables import AlertRow
+
+    with get_session() as session:
+        session.exec(delete(AlertRow))
+        session.commit()
+
     r = client.post("/api/alerts/check")
     assert r.status_code == 200
     assert set(r.json()) == {"created"}

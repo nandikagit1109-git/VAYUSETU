@@ -27,6 +27,7 @@ class FLClient:
         batch_size: int = 64,
         lr: float = 0.001,
         local_epochs: int = 2,
+        client_index: int = 0,
     ) -> None:
         self.city_id = city_id
         self.X_train = X_train.astype(np.float32)
@@ -37,9 +38,9 @@ class FLClient:
         self.batch_size = batch_size
         self.lr = lr
         self.local_epochs = local_epochs
+        self.client_index = client_index
         # Every client starts from the same seeded architecture and weights.
         self.model = build_model(seed)
-        self._g = torch.Generator().manual_seed(seed)
 
     def n_train(self) -> int:
         return int(self.X_train.shape[0])
@@ -47,10 +48,12 @@ class FLClient:
     def n_val(self) -> int:
         return int(self.X_val.shape[0])
 
-    def fit(self, global_params: list | None = None) -> tuple[list, int, float]:
+    def fit(self, global_params: list | None = None, round_index: int = 0) -> tuple[list, int, float]:
         """Train FL_LOCAL_EPOCHS epochs from the given global parameters.
 
-        Returns (params_as_list_of_numpy_float32, n_train,
+        The training shuffle uses SEED + round_index*1000 + client_index
+        (section 6), so two runs with identical data produce identical round
+        values. Returns (params_as_numpy_float32, n_train,
         mean_train_loss_last_epoch).
         """
         if global_params is not None:
@@ -58,10 +61,11 @@ class FLClient:
         self.model.train()
         opt = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
+        gen = torch.Generator().manual_seed(self.seed + round_index * 1000 + self.client_index)
         n = self.X_train.shape[0]
         last_epoch_losses: list[float] = []
         for _epoch in range(self.local_epochs):
-            order = torch.randperm(n, generator=self._g)
+            order = torch.randperm(n, generator=gen)
             epoch_losses = []
             for start in range(0, n, self.batch_size):
                 idx = order[start:start + self.batch_size]

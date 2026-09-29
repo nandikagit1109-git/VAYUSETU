@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements.txt ./
 # CPU-only torch wheels first (no CUDA needed for the demo), then the rest.
 RUN pip install --no-cache-dir torch==2.4.1 \
       --index-url https://download.pytorch.org/whl/cpu \
@@ -13,8 +13,12 @@ COPY scripts ./scripts
 COPY pytest.ini ./
 COPY data ./data
 
-# data/processed is generated at startup (or baked empty); raw/ stays a placeholder.
-RUN mkdir -p data/processed
+# data/processed is generated at startup (or mounted as a volume); raw/ stays
+# a placeholder for optional user-supplied real data.
+RUN mkdir -p data/processed data/raw \
+    && useradd --create-home --uid 10001 vayu \
+    && chown -R vayu:vayu /app
+USER vayu
 
 EXPOSE 8000
 

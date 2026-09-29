@@ -9,9 +9,16 @@ import base64
 import binascii
 import io
 
-from PIL import Image
+from PIL import Image, ImageFile
 
 from ..config import PHOTO_MAX_BYTES
+
+# Decompression-bomb guard (section 10): anything bigger is rejected before
+# decode, and truncated images fail loudly instead of half-decoding.
+Image.MAX_IMAGE_PIXELS = 20_000_000
+ImageFile.LOAD_TRUNCATED_IMAGES = False
+
+ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
 
 SCORER_ID = "heuristic_v1"
 CONFIDENCE = 0.5  # fixed: heuristic, not a calibrated model
@@ -27,6 +34,14 @@ class PhotoError(Exception):
     pass
 
 
+class ImageTooLarge(PhotoError):
+    pass
+
+
+# Back-compat alias: byte-limit rejections were historically PhotoTooLarge.
+PhotoTooLarge = ImageTooLarge
+
+
 def decode_photo(photo_base64: str, max_bytes: int) -> bytes:
     payload = photo_base64.strip()
     if payload.lower().startswith("data:"):
@@ -39,12 +54,8 @@ def decode_photo(photo_base64: str, max_bytes: int) -> bytes:
     except (binascii.Error, ValueError) as exc:
         raise PhotoError("could not read image") from exc
     if len(raw) > max_bytes:
-        raise PhotoTooLarge(f"photo exceeds {max_bytes} bytes")
+        raise ImageTooLarge(f"photo exceeds {max_bytes} bytes")
     return raw
-
-
-class PhotoTooLarge(PhotoError):
-    pass
 
 
 def _load_image(raw: bytes) -> Image.Image:
@@ -53,9 +64,13 @@ def _load_image(raw: bytes) -> Image.Image:
         img.verify()  # integrity check
         img = Image.open(io.BytesIO(raw))  # reopen: verify() leaves the image unusable
         img.load()
-        return img
+    except Image.DecompressionBombError as exc:
+        raise ImageTooLarge("image too large") from exc
     except Exception as exc:
         raise PhotoError("could not read image") from exc
+    if img.format not in ALLOWED_FORMATS:
+        raise PhotoError("unsupported image format")
+    return img
 
 
 def score_photo(raw: bytes) -> float:

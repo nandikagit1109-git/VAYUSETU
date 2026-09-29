@@ -13,6 +13,7 @@ import type {
   Forecast,
   Hotspot,
   Meta,
+  PointAqi,
   ReportCreate,
   ReportResult,
 } from './types'
@@ -63,6 +64,12 @@ export function getReports(cityId?: string): Promise<{ reports: CitizenReport[] 
 
 export function getHotspots(): Promise<{ hotspots: Hotspot[] }> {
   return request('/api/hotspots')
+}
+
+// Point AQI (section 7b): "outside India" arrives as HTTP 200 + the error
+// envelope, so the promise resolves and the caller renders the message.
+export function getPointAqi(latitude: number, longitude: number): Promise<PointAqi | ApiError> {
+  return request(`/api/aqi?latitude=${latitude}&longitude=${longitude}`)
 }
 
 // Expected "not available" states arrive as HTTP 200 + the error envelope, so
